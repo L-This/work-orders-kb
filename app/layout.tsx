@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export const metadata = {
   title: 'مرجع أوامر العمل',
-  description: 'نظام إدارة معرفة المشاريع وأوامر العمل والكميات',
+  description: 'قاعدة معرفة لأوامر العمل والمواقع والكميات',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -11,11 +11,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ar" dir="rtl">
       <body>
         <header className="topbar">
-          <div>
-            <h1>مرجع أوامر العمل</h1>
-            <p>بحث عام، بحث داخل المشروع، وبحث داخل الموقع</p>
-          </div>
-          <nav>
+          <Link href="/" className="brand">
+            <span className="brand-mark">WO</span>
+            <div>
+              <strong>مرجع أوامر العمل</strong>
+              <small>Project Knowledge Base</small>
+            </div>
+          </Link>
+          <nav className="nav">
             <Link href="/">الرئيسية</Link>
             <Link href="/import">استيراد Excel</Link>
           </nav>
