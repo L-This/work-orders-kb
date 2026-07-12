@@ -1,136 +1,427 @@
 'use client';
-import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
+
 import Link from 'next/link';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { normalizeArabic, toNumber, excelDateToISO } from '@/lib/helpers';
+import { useMemo, useState } from 'react';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { normalizeArabic } from '@/lib/helpers';
+import { parseAfnanMatrixWorkbook, SmartWorkbook } from '@/lib/excel-import';
 
-type Row = Record<string, any>;
-
-type Mapping = {
-  projectName:string; siteName:string; workOrderNumber:string; workOrderDate:string; itemName:string; unit:string; quantity:string; executedQuantity:string; remainingQuantity:string; itemNo:string;
+type ImportProgress = {
+  step: string;
+  current: number;
+  total: number;
 };
-const emptyMap: Mapping = {projectName:'',siteName:'',workOrderNumber:'',workOrderDate:'',itemName:'',unit:'',quantity:'',executedQuantity:'',remainingQuantity:'',itemNo:''};
-const labels:any = {projectName:'اسم المشروع',siteName:'اسم الموقع',workOrderNumber:'رقم أمر العمل',workOrderDate:'تاريخ أمر العمل',itemName:'اسم البند',unit:'الوحدة',quantity:'كمية أمر العمل',executedQuantity:'المنفذ',remainingQuantity:'المتبقي',itemNo:'رقم البند'};
 
-function guess(headers:string[], words:string[]){
-  return headers.find(h => words.some(w => normalizeArabic(h).includes(normalizeArabic(w)))) || '';
-}
+const keyOf = (...parts: unknown[]) => parts.map(p => String(p ?? '')).join('::');
 
-export default function ImportPage(){
-  const [fileName,setFileName]=useState('');
-  const [sheets,setSheets]=useState<Record<string, Row[]>>({});
-  const [sheet,setSheet]=useState('');
-  const [mapping,setMapping]=useState<Mapping>(emptyMap);
-  const [status,setStatus]=useState('');
-  const rows=sheets[sheet]||[];
-  const headers=useMemo(()=> rows[0] ? Object.keys(rows[0]) : [],[rows]);
-  const parsed=useMemo(()=> rows.map((r,idx)=>({
-    rowNumber: idx+2,
-    projectName: mapping.projectName ? r[mapping.projectName] : '',
-    siteName: mapping.siteName ? r[mapping.siteName] : '',
-    workOrderNumber: mapping.workOrderNumber ? r[mapping.workOrderNumber] : '',
-    workOrderDate: mapping.workOrderDate ? excelDateToISO(r[mapping.workOrderDate]) : null,
-    itemName: mapping.itemName ? r[mapping.itemName] : '',
-    unit: mapping.unit ? r[mapping.unit] : '',
-    quantity: mapping.quantity ? toNumber(r[mapping.quantity]) : 0,
-    executedQuantity: mapping.executedQuantity ? toNumber(r[mapping.executedQuantity]) : 0,
-    remainingQuantity: mapping.remainingQuantity ? toNumber(r[mapping.remainingQuantity]) : 0,
-    itemNo: mapping.itemNo ? r[mapping.itemNo] : '',
-    raw: r
-  })).filter(r=>r.itemName || r.siteName || r.workOrderNumber),[rows,mapping]);
+export default function ImportPage() {
+  const [fileName, setFileName] = useState('');
+  const [data, setData] = useState<SmartWorkbook | null>(null);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const [imported, setImported] = useState(false);
 
-  async function onFile(e:React.ChangeEvent<HTMLInputElement>){
-    const f=e.target.files?.[0]; if(!f) return;
-    setFileName(f.name); setStatus('جاري قراءة الملف...');
-    const data=await f.arrayBuffer();
-    const wb=XLSX.read(data,{type:'array', cellDates:true});
-    const all:Record<string,Row[]>={};
-    wb.SheetNames.forEach(name=>{
-      const ws=wb.Sheets[name];
-      const json=XLSX.utils.sheet_to_json<Row>(ws,{defval:'', raw:false});
-      if(json.length) all[name]=json;
-    });
-    setSheets(all); const first=Object.keys(all)[0]||''; setSheet(first);
-    const hs=first ? Object.keys(all[first]?.[0]||{}) : [];
-    setMapping({
-      projectName: guess(hs,['المشروع','اسم المشروع']) || '',
-      siteName: guess(hs,['الموقع','الحديقة','الشارع','مكان التنفيذ']) || '',
-      workOrderNumber: guess(hs,['امر العمل','أمر العمل','رقم الامر','رقم الأمر']) || '',
-      workOrderDate: guess(hs,['التاريخ','تاريخ الامر','تاريخ أمر']) || '',
-      itemName: guess(hs,['البند','الوصف','بيان الاعمال','بيان الأعمال']) || '',
-      unit: guess(hs,['الوحده','الوحدة','وحدة']) || '',
-      quantity: guess(hs,['الكميه','الكمية','كمية الامر','كمية أمر']) || '',
-      executedQuantity: guess(hs,['المنفذ','المنفذة','اجمالي المنفذ']) || '',
-      remainingQuantity: guess(hs,['المتبقي','المتبقية','الباقي']) || '',
-      itemNo: guess(hs,['رقم البند','م','البند رقم']) || ''
-    });
-    setStatus('تمت قراءة الملف. راجع ربط الأعمدة ثم اضغط استيراد.');
-  }
+  const metrics = useMemo(() => {
+    if (!data) return null;
+    return {
+      boqItems: data.boqItems.length,
+      workOrders: data.workOrders.length,
+      sites: data.sites.length,
+      orderLines: data.workOrders.reduce((sum, order) => sum + order.items.length, 0),
+      executed: data.workOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + item.quantity, 0), 0),
+    };
+  }, [data]);
 
-  async function ensureProject(name:string){
-    const projectName = String(name||'مشروع صيانة وري الحدائق والمزروعات شرق محافظة جدة - بريمان وطيبة').trim();
-    let {data}=await supabase.from('projects').select('id').eq('name',projectName).maybeSingle();
-    if(data?.id) return data.id;
-    const res=await supabase.from('projects').insert({name:projectName,status:'active'}).select('id').single();
-    if(res.error) throw res.error; return res.data.id;
-  }
-  async function ensureSite(project_id:string,name:string){
-    const siteName=String(name||'موقع غير محدد').trim();
-    let {data}=await supabase.from('sites').select('id').eq('project_id',project_id).eq('name',siteName).maybeSingle();
-    if(data?.id) return data.id;
-    const res=await supabase.from('sites').insert({project_id,name:siteName,normalized_name:normalizeArabic(siteName)}).select('id').single();
-    if(res.error) throw res.error; return res.data.id;
-  }
-  async function ensureItem(name:string,unit:string){
-    const itemName=String(name||'بند غير محدد').trim();
-    let {data}=await supabase.from('items').select('id').eq('name',itemName).maybeSingle();
-    if(data?.id) return data.id;
-    const res=await supabase.from('items').insert({name:itemName,normalized_name:normalizeArabic(itemName),unit:unit||null}).select('id').single();
-    if(res.error) throw res.error; return res.data.id;
-  }
-  async function ensureWorkOrder(project_id:string, num:string, date:any){
-    const work_order_number=String(num||'بدون رقم').trim();
-    let {data}=await supabase.from('work_orders').select('id').eq('project_id',project_id).eq('work_order_number',work_order_number).maybeSingle();
-    if(data?.id) return data.id;
-    const res=await supabase.from('work_orders').insert({project_id,work_order_number,work_order_date:date,source_file_name:fileName}).select('id').single();
-    if(res.error) throw res.error; return res.data.id;
-  }
-
-  async function importData(){
-    if(!isSupabaseConfigured){ setStatus('لم يتم ربط Supabase. أضف .env.local أولاً.'); return; }
-    if(!parsed.length){ setStatus('لا توجد بيانات قابلة للاستيراد.'); return; }
-    setStatus('جاري الاستيراد...');
-    const batch=await supabase.from('import_batches').insert({file_name:fileName,import_status:'uploaded'}).select('id').single();
-    if(batch.error){ setStatus(batch.error.message); return; }
-    let ok=0, err=0;
-    for(const r of parsed){
-      try{
-        const project_id=await ensureProject(r.projectName);
-        const site_id=await ensureSite(project_id,r.siteName);
-        const item_id=await ensureItem(r.itemName,r.unit);
-        const work_order_id=await ensureWorkOrder(project_id,r.workOrderNumber,r.workOrderDate);
-        await supabase.from('work_order_sites').upsert({work_order_id,site_id},{onConflict:'work_order_id,site_id'});
-        const ins=await supabase.from('work_order_items').insert({work_order_id,site_id,item_id,item_no:String(r.itemNo||''),unit:r.unit||null,quantity:r.quantity,executed_quantity:r.executedQuantity,remaining_quantity:r.remainingQuantity,source_sheet:sheet,source_row_number:r.rowNumber});
-        if(ins.error) throw ins.error;
-        await supabase.from('raw_excel_rows').insert({import_batch_id:batch.data.id,sheet_name:sheet,row_number:r.rowNumber,raw_data:r.raw,parsed_project_name:r.projectName,parsed_site_name:r.siteName,parsed_work_order_number:r.workOrderNumber,parsed_work_order_date:r.workOrderDate,parsed_item_name:r.itemName,parsed_unit:r.unit,parsed_quantity:r.quantity,parsed_executed_quantity:r.executedQuantity,parsed_remaining_quantity:r.remainingQuantity,parse_status:'imported'});
-        ok++;
-      }catch(e:any){ err++; console.error(e); }
+  async function onFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setData(null);
+    setImported(false);
+    setError('');
+    setStatus('جاري تحليل الملف واكتشاف بنية أوامر العمل...');
+    try {
+      const parsed = parseAfnanMatrixWorkbook(await file.arrayBuffer());
+      setData(parsed);
+      setStatus('اكتمل التحليل. راجع الملخص وأوامر العمل قبل اعتماد الاستيراد.');
+    } catch (e: any) {
+      setError(e?.message || 'تعذر تحليل ملف Excel.');
+      setStatus('');
     }
-    await supabase.from('import_batches').update({import_status: err?'imported_with_errors':'imported',imported_rows_count:ok,error_rows_count:err}).eq('id',batch.data.id);
-    setStatus(`تم الاستيراد: ${ok} صف. أخطاء: ${err}.`);
   }
 
-  return <main className="page">
-    <Link href="/" className="btn">رجوع</Link>
-    <div className="section-title"><h3>استيراد مشروع من Excel</h3></div>
-    <div className="steps"><span className="step active">1 رفع الملف</span><span className="step active">2 ربط الأعمدة</span><span className="step active">3 معاينة</span><span className="step">4 استيراد</span></div>
-    <section className="drop"><input type="file" accept=".xlsx,.xls" onChange={onFile}/><p className="muted">اختر ملف أوامر العمل. تتم القراءة داخل المتصفح.</p></section>
-    {status && <p className="notice">{status}</p>}
-    {headers.length>0 && <section className="panel" style={{marginTop:18}}>
-      <div className="toolbar"><label>اختر الشيت</label><select value={sheet} onChange={e=>setSheet(e.target.value)}>{Object.keys(sheets).map(s=><option key={s}>{s}</option>)}</select></div>
-      <h3>ربط الأعمدة</h3><div className="mapping">{Object.keys(labels).map(k=><label key={k}>{labels[k]}<select value={(mapping as any)[k]} onChange={e=>setMapping(m=>({...m,[k]:e.target.value}))}><option value="">غير مربوط</option>{headers.map(h=><option key={h} value={h}>{h}</option>)}</select></label>)}</div>
-    </section>}
-    {parsed.length>0 && <section className="panel" style={{marginTop:18}}><div className="section-title"><h3>معاينة أول 50 صف</h3><button className="btn primary" onClick={importData}>استيراد إلى Supabase</button></div><div className="table-wrap"><table><thead><tr><th>المشروع</th><th>الموقع</th><th>رقم الأمر</th><th>التاريخ</th><th>البند</th><th>الوحدة</th><th>الكمية</th><th>المنفذ</th><th>المتبقي</th></tr></thead><tbody>{parsed.slice(0,50).map((r,i)=><tr key={i}><td>{r.projectName}</td><td>{r.siteName}</td><td>{r.workOrderNumber}</td><td>{r.workOrderDate||'—'}</td><td><b>{r.itemName}</b></td><td>{r.unit}</td><td>{r.quantity}</td><td>{r.executedQuantity}</td><td>{r.remainingQuantity}</td></tr>)}</tbody></table></div></section>}
-  </main>
+  async function ensureProject(parsed: SmartWorkbook) {
+    const payload = {
+      name: parsed.project.name,
+      code: parsed.project.code || null,
+      municipality: parsed.project.municipality || null,
+      contractor_name: parsed.project.contractorName || null,
+      status: 'active',
+      description: 'تم استيراد بيانات المشروع من جدول الكميات وأوامر العمل التاريخية.',
+    };
+    const existing = parsed.project.code
+      ? await supabase.from('projects').select('id,name').eq('code', parsed.project.code).maybeSingle()
+      : await supabase.from('projects').select('id,name').eq('name', parsed.project.name).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data?.id) {
+      const updatePayload = { ...payload, name: existing.data.name || parsed.project.name };
+      const update = await supabase.from('projects').update(updatePayload).eq('id', existing.data.id);
+      if (update.error) throw update.error;
+      return existing.data.id as string;
+    }
+    const inserted = await supabase.from('projects').insert(payload).select('id').single();
+    if (inserted.error) throw inserted.error;
+    return inserted.data.id as string;
+  }
+
+  async function ensureContract(projectId: string, parsed: SmartWorkbook) {
+    const contractNumber = parsed.project.code || 'العقد الرئيسي';
+    const payload = {
+      project_id: projectId,
+      contract_number: contractNumber,
+      contract_name: parsed.project.name,
+      start_date: parsed.project.startDate,
+      end_date: parsed.project.endDate,
+      contractor_name: parsed.project.contractorName || null,
+      total_value: parsed.project.contractValue,
+      notes: `مصدر البيانات: ${fileName}`,
+    };
+    const existing = await supabase.from('contracts').select('id').eq('project_id', projectId).eq('contract_number', contractNumber).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data?.id) {
+      const update = await supabase.from('contracts').update(payload).eq('id', existing.data.id);
+      if (update.error) throw update.error;
+      return existing.data.id as string;
+    }
+    const inserted = await supabase.from('contracts').insert(payload).select('id').single();
+    if (inserted.error) throw inserted.error;
+    return inserted.data.id as string;
+  }
+
+  async function importWorkbook() {
+    if (!data) return;
+    if (!isSupabaseConfigured) {
+      setError('لم يتم ربط Supabase بالموقع.');
+      return;
+    }
+    setError('');
+    setImported(false);
+    setStatus('بدأ الاستيراد. لا تغلق الصفحة حتى تظهر رسالة الاكتمال.');
+
+    let batchId = '';
+    try {
+      const projectId = await ensureProject(data);
+      const contractId = await ensureContract(projectId, data);
+      const batch = await supabase.from('import_batches').insert({
+        project_id: projectId,
+        file_name: fileName,
+        import_status: 'parsed',
+        notes: `المحلل: ${data.parser} — ${data.workOrders.length} أوامر عمل، ${data.sites.length} مواقع، ${data.boqItems.length} بنود.`,
+      }).select('id').single();
+      if (batch.error) throw batch.error;
+      batchId = batch.data.id;
+
+      const siteIds = new Map<string, string>();
+      setProgress({ step: 'إنشاء المواقع', current: 0, total: data.sites.length });
+      for (let index = 0; index < data.sites.length; index += 1) {
+        const siteName = data.sites[index];
+        const existing = await supabase.from('sites').select('id').eq('project_id', projectId).eq('name', siteName).maybeSingle();
+        if (existing.error) throw existing.error;
+        let siteId = existing.data?.id as string | undefined;
+        if (!siteId) {
+          const inserted = await supabase.from('sites').insert({
+            project_id: projectId,
+            name: siteName,
+            normalized_name: normalizeArabic(siteName),
+            status: 'active',
+          }).select('id').single();
+          if (inserted.error) throw inserted.error;
+          siteId = inserted.data.id;
+        }
+        siteIds.set(siteName, siteId);
+        setProgress({ step: 'إنشاء المواقع', current: index + 1, total: data.sites.length });
+      }
+
+      const itemIds = new Map<string, string>();
+      const boqIds = new Map<string, string>();
+      setProgress({ step: 'استيراد جدول الكميات', current: 0, total: data.boqItems.length });
+      for (let index = 0; index < data.boqItems.length; index += 1) {
+        const item = data.boqItems[index];
+        const normalized = normalizeArabic(item.itemName);
+        const existing = await supabase.from('items').select('id').eq('name', item.itemName).maybeSingle();
+        if (existing.error) throw existing.error;
+        let itemId = existing.data?.id as string | undefined;
+        if (!itemId) {
+          const inserted = await supabase.from('items').insert({
+            name: item.itemName,
+            normalized_name: normalized,
+            unit: item.unit || null,
+            is_active: true,
+          }).select('id').single();
+          if (inserted.error) throw inserted.error;
+          itemId = inserted.data.id;
+        }
+        itemIds.set(keyOf(item.itemNo, item.itemName), itemId);
+
+        const boqExisting = await supabase.from('project_boq_items')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('item_id', itemId)
+          .eq('boq_item_no', item.itemNo)
+          .maybeSingle();
+        if (boqExisting.error) throw boqExisting.error;
+        const boqPayload = {
+          project_id: projectId,
+          contract_id: contractId,
+          item_id: itemId,
+          boq_item_no: item.itemNo,
+          unit: item.unit || null,
+          contract_quantity: item.contractQuantity,
+          unit_price: item.unitPrice,
+          total_price: item.totalPrice,
+          notes: `صف Excel رقم ${item.rowNumber}`,
+        };
+        let boqId = boqExisting.data?.id as string | undefined;
+        if (boqId) {
+          const updated = await supabase.from('project_boq_items').update(boqPayload).eq('id', boqId);
+          if (updated.error) throw updated.error;
+        } else {
+          const inserted = await supabase.from('project_boq_items').insert(boqPayload).select('id').single();
+          if (inserted.error) throw inserted.error;
+          boqId = inserted.data.id;
+        }
+        boqIds.set(keyOf(item.itemNo, item.itemName), boqId);
+        setProgress({ step: 'استيراد جدول الكميات', current: index + 1, total: data.boqItems.length });
+      }
+
+      let importedLines = 0;
+      const totalLines = data.workOrders.reduce((sum, order) => sum + order.items.length, 0);
+      setProgress({ step: 'استيراد أوامر العمل', current: 0, total: totalLines });
+      for (const order of data.workOrders) {
+        const workOrderNumber = order.number;
+        const existing = await supabase.from('work_orders').select('id').eq('project_id', projectId).eq('work_order_number', workOrderNumber).maybeSingle();
+        if (existing.error) throw existing.error;
+        const orderPayload = {
+          project_id: projectId,
+          contract_id: contractId,
+          work_order_number: workOrderNumber,
+          work_order_date: order.startDate,
+          title: `أمر عمل رقم ${workOrderNumber}`,
+          status: order.status,
+          contractor_name: data.project.contractorName || null,
+          notes: order.endDate ? `تاريخ الانتهاء: ${order.endDate}` : null,
+          source_file_name: fileName,
+        };
+        let workOrderId = existing.data?.id as string | undefined;
+        if (workOrderId) {
+          const updated = await supabase.from('work_orders').update(orderPayload).eq('id', workOrderId);
+          if (updated.error) throw updated.error;
+        } else {
+          const inserted = await supabase.from('work_orders').insert(orderPayload).select('id').single();
+          if (inserted.error) throw inserted.error;
+          workOrderId = inserted.data.id;
+        }
+
+        for (const siteName of order.sites) {
+          const siteId = siteIds.get(siteName);
+          if (!siteId) continue;
+          const relation = await supabase.from('work_order_sites').upsert(
+            { work_order_id: workOrderId, site_id: siteId },
+            { onConflict: 'work_order_id,site_id' },
+          );
+          if (relation.error) throw relation.error;
+        }
+
+        for (const line of order.items) {
+          const mapKey = keyOf(line.itemNo, line.itemName);
+          const itemId = itemIds.get(mapKey);
+          const boqId = boqIds.get(mapKey);
+          if (!itemId) continue;
+          const existingLine = await supabase.from('work_order_items')
+            .select('id')
+            .eq('work_order_id', workOrderId)
+            .eq('item_id', itemId)
+            .eq('source_sheet', data.sheetName)
+            .eq('source_row_number', line.rowNumber)
+            .maybeSingle();
+          if (existingLine.error) throw existingLine.error;
+          const payload = {
+            work_order_id: workOrderId,
+            site_id: null,
+            item_id: itemId,
+            boq_item_id: boqId || null,
+            item_no: line.itemNo,
+            unit: line.unit || null,
+            quantity: line.quantity,
+            executed_quantity: line.quantity,
+            remaining_quantity: line.remainingAfterOrder,
+            total_price: line.totalPrice,
+            notes: order.sites.length ? `مواقع التنفيذ: ${order.sites.join('، ')}` : null,
+            source_sheet: data.sheetName,
+            source_row_number: line.rowNumber,
+          };
+          if (existingLine.data?.id) {
+            const updated = await supabase.from('work_order_items').update(payload).eq('id', existingLine.data.id);
+            if (updated.error) throw updated.error;
+          } else {
+            const inserted = await supabase.from('work_order_items').insert(payload);
+            if (inserted.error) throw inserted.error;
+          }
+          const raw = await supabase.from('raw_excel_rows').insert({
+            import_batch_id: batchId,
+            sheet_name: data.sheetName,
+            row_number: line.rowNumber,
+            raw_data: { order: workOrderNumber, line, sites: order.sites },
+            parsed_project_name: data.project.name,
+            parsed_site_name: order.sites.join('، '),
+            parsed_work_order_number: workOrderNumber,
+            parsed_work_order_date: order.startDate,
+            parsed_item_name: line.itemName,
+            parsed_unit: line.unit,
+            parsed_quantity: line.quantity,
+            parsed_executed_quantity: line.quantity,
+            parsed_remaining_quantity: line.remainingAfterOrder,
+            parse_status: 'imported',
+          });
+          if (raw.error) throw raw.error;
+          importedLines += 1;
+          setProgress({ step: 'استيراد أوامر العمل', current: importedLines, total: totalLines });
+        }
+      }
+
+      const complete = await supabase.from('import_batches').update({
+        import_status: 'imported',
+        imported_rows_count: importedLines,
+        error_rows_count: 0,
+      }).eq('id', batchId);
+      if (complete.error) throw complete.error;
+      setProgress(null);
+      setImported(true);
+      setStatus(`تم استيراد المشروع بنجاح: ${data.workOrders.length} أوامر عمل، ${data.sites.length} مواقع، ${importedLines} بند منفذ.`);
+    } catch (e: any) {
+      console.error(e);
+      if (batchId) {
+        await supabase.from('import_batches').update({ import_status: 'failed', error_rows_count: 1, notes: e?.message || 'خطأ غير معروف' }).eq('id', batchId);
+      }
+      setProgress(null);
+      setError(e?.message || 'تعذر إكمال الاستيراد.');
+      setStatus('');
+    }
+  }
+
+  return (
+    <main className="page import-page">
+      <div className="page-heading">
+        <span className="section-kicker">إدارة المشاريع</span>
+        <h1>استيراد مشروع من Excel</h1>
+        <p>يقرأ النظام قالب جدول الكميات، يستخرج المشروع والعقد والمواقع وأوامر العمل والبنود، ثم يعرض لك مراجعة كاملة قبل الكتابة في القاعدة.</p>
+      </div>
+
+      <div className="steps import-steps">
+        <span className={`step ${fileName ? 'active' : ''}`}>1 رفع الملف</span>
+        <span className={`step ${data ? 'active' : ''}`}>2 التحليل الذكي</span>
+        <span className={`step ${data ? 'active' : ''}`}>3 المراجعة</span>
+        <span className={`step ${imported ? 'active' : ''}`}>4 الاعتماد</span>
+      </div>
+
+      <section className="drop import-drop">
+        <input id="excel-file" type="file" accept=".xlsx,.xls" onChange={onFile} />
+        <label htmlFor="excel-file">
+          <span className="upload-icon">XL</span>
+          <strong>{fileName || 'اختر ملف جدول الكميات وأوامر العمل'}</strong>
+          <small>الملفات المدعومة: XLSX و XLS — تتم القراءة داخل المتصفح ولا يُحفظ الملف قبل الاعتماد.</small>
+        </label>
+      </section>
+
+      {status && <div className="notice import-notice">{status}</div>}
+      {error && <div className="notice error-notice">{error}</div>}
+
+      {data && metrics && (
+        <>
+          <section className="panel import-project-summary">
+            <div>
+              <span className="section-kicker">بيانات المشروع المكتشفة</span>
+              <h2>{data.project.name}</h2>
+              <p>{data.project.municipality || 'البلدية غير مذكورة'} · {data.project.contractorName || 'المقاول غير مذكور'}</p>
+            </div>
+            <div className="project-meta-grid">
+              <span><small>رقم المشروع</small><b>{data.project.code || '—'}</b></span>
+              <span><small>بداية المشروع</small><b>{data.project.startDate || '—'}</b></span>
+              <span><small>نهاية المشروع</small><b>{data.project.endDate || '—'}</b></span>
+              <span><small>قيمة البنود</small><b>{data.project.contractValue.toLocaleString('ar-SA')}</b></span>
+            </div>
+          </section>
+
+          <section className="stats import-metrics">
+            <div className="stat"><small>بنود جدول الكميات</small><strong>{metrics.boqItems}</strong><span>البنود الأصلية للعقد</span></div>
+            <div className="stat"><small>أوامر العمل المكتشفة</small><strong>{metrics.workOrders}</strong><span>أوامر تحتوي بيانات فعلية</span></div>
+            <div className="stat"><small>المواقع</small><strong>{metrics.sites}</strong><span>أسماء مواقع منفصلة</span></div>
+            <div className="stat"><small>بنود أوامر العمل</small><strong>{metrics.orderLines}</strong><span>سطر قابل للاستيراد</span></div>
+          </section>
+
+          {data.warnings.length > 0 && (
+            <section className="panel warning-panel">
+              <h3>ملاحظات قبل الاعتماد</h3>
+              {data.warnings.map(warning => <p key={warning}>• {warning}</p>)}
+            </section>
+          )}
+
+          <section className="panel">
+            <div className="section-title">
+              <div><span className="section-kicker">المراجعة</span><h2>أوامر العمل والمواقع</h2></div>
+              <span>{data.workOrders.length} أوامر</span>
+            </div>
+            <div className="import-orders-grid">
+              {data.workOrders.map(order => (
+                <article className="import-order-card" key={order.number}>
+                  <div className="import-order-head">
+                    <span>أمر عمل</span>
+                    <strong>{order.number}</strong>
+                  </div>
+                  <div className="import-order-data">
+                    <p><small>تاريخ البدء</small><b>{order.startDate || 'غير مذكور'}</b></p>
+                    <p><small>المواقع</small><b>{order.sites.length}</b></p>
+                    <p><small>البنود المنفذة</small><b>{order.items.length}</b></p>
+                  </div>
+                  <div className="site-chips">
+                    {order.sites.slice(0, 5).map(site => <span key={site}>{site}</span>)}
+                    {order.sites.length > 5 && <span>+{order.sites.length - 5}</span>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="section-title">
+              <div><span className="section-kicker">المعاينة</span><h2>أول بنود جدول الكميات</h2></div>
+              <span>يتم استيراد جميع البنود</span>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>رقم البند</th><th>الوصف</th><th>الوحدة</th><th>كمية العقد</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+                <tbody>{data.boqItems.slice(0, 18).map(item => (
+                  <tr key={`${item.itemNo}-${item.rowNumber}`}><td>{item.itemNo}</td><td><b>{item.itemName}</b></td><td>{item.unit}</td><td>{item.contractQuantity.toLocaleString('ar-SA')}</td><td>{item.unitPrice.toLocaleString('ar-SA')}</td><td>{item.totalPrice.toLocaleString('ar-SA')}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="panel import-approval">
+            <div>
+              <span className="section-kicker">الاعتماد النهائي</span>
+              <h2>استيراد البيانات إلى Supabase</h2>
+              <p>الاستيراد آمن عند تكراره: يتم تحديث المشروع والعقد والبنود وأوامر العمل الموجودة بدل إنشاء نسخ مكررة.</p>
+            </div>
+            <button className="btn primary import-button" onClick={importWorkbook} disabled={Boolean(progress) || imported}>
+              {progress ? `${progress.step} (${progress.current}/${progress.total})` : imported ? 'تم الاعتماد بنجاح' : 'اعتماد واستيراد المشروع'}
+            </button>
+            {progress && <div className="progress-track"><span style={{ width: `${progress.total ? (progress.current / progress.total) * 100 : 0}%` }} /></div>}
+            {imported && <div className="import-success-actions"><Link className="btn primary" href="/">فتح مركز المعرفة</Link><Link className="btn" href="/projects">فتح المشروع</Link></div>}
+          </section>
+        </>
+      )}
+    </main>
+  );
 }
