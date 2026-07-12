@@ -1,9 +1,10 @@
 'use client';
+import { parseDateOnly } from '@/lib/helpers';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 type Order={id:string;work_order_number:string;work_order_date:string|null;title:string|null;status:string|null;contractor_name:string|null;projects:{name:string}|null};
-const date=(v:string|null)=>v?new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'short',day:'numeric'}).format(new Date(v)):'—';
+const date=(v:string|null)=>v?new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'short',day:'numeric'}).format(parseDateOnly(v)):'—';
 export default function OrdersPage(){
  const [rows,setRows]=useState<Order[]>([]);const [q,setQ]=useState('');const [loading,setLoading]=useState(true);
  useEffect(()=>{if(!isSupabaseConfigured){setLoading(false);return;}supabase.from('work_orders').select('id,work_order_number,work_order_date,title,status,contractor_name,projects(name)').order('work_order_date',{ascending:false,nullsFirst:false}).then(({data})=>{setRows((data||[]) as unknown as Order[]);setLoading(false);});},[]);

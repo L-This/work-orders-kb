@@ -1,4 +1,5 @@
 'use client';
+import { parseDateOnly } from '@/lib/helpers';
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -78,7 +79,7 @@ function formatNumber(value: unknown) {
 
 function formatDate(value: string | null) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value));
+  return new Intl.DateTimeFormat('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' }).format(parseDateOnly(value));
 }
 
 export default function Home() {
