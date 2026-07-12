@@ -33,6 +33,7 @@ export type ParsedWorkOrder = {
     itemName: string;
     unit: string;
     quantity: number;
+    unitPrice: number;
     totalPrice: number;
     remainingAfterOrder: number;
   }>;
@@ -142,6 +143,7 @@ export function parseAfnanMatrixWorkbook(buffer: ArrayBuffer): SmartWorkbook {
       itemName: str(cell(rows, r, 1)),
       unit: str(cell(rows, r, 2)),
       quantity: numeric(cell(rows, r, col)),
+      unitPrice: numeric(cell(rows, r, 4)),
       totalPrice: numeric(cell(rows, r, col + 1)),
       remainingAfterOrder: numeric(cell(rows, r, col + 2)),
     })).filter(item => item.quantity !== 0 || item.totalPrice !== 0);

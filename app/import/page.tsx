@@ -256,6 +256,7 @@ export default function ImportPage() {
             quantity: line.quantity,
             executed_quantity: line.quantity,
             remaining_quantity: line.remainingAfterOrder,
+            unit_price: line.unitPrice,
             total_price: line.totalPrice,
             notes: order.sites.length ? `مواقع التنفيذ: ${order.sites.join('، ')}` : null,
             source_sheet: data.sheetName,

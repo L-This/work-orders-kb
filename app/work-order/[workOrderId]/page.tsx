@@ -25,6 +25,7 @@ type SiteRelation = {
 type ItemRow = {
   id: string;
   item_id: string;
+  boq_item_id: string | null;
   item_no: string | null;
   unit: string | null;
   quantity: number | string | null;
@@ -104,7 +105,7 @@ export default function WorkOrderDetailPage({
       supabase
         .from('work_order_items')
         .select(
-          'id,item_id,item_no,unit,quantity,executed_quantity,remaining_quantity,unit_price,total_price,notes,items(id,name,category)',
+          'id,item_id,boq_item_id,item_no,unit,quantity,executed_quantity,remaining_quantity,unit_price,total_price,notes,items(id,name,category)',
         )
         .eq('work_order_id', params.workOrderId)
         .order('item_no', { ascending: true }),
@@ -127,9 +128,36 @@ export default function WorkOrderDetailPage({
       return;
     }
 
+    const rawItems = (itemsResult.data || []) as unknown as ItemRow[];
+    const boqIds = Array.from(
+      new Set(rawItems.map((item) => item.boq_item_id).filter((id): id is string => Boolean(id))),
+    );
+    const boqPrices = new Map<string, number>();
+    if (boqIds.length) {
+      const boqResult = await supabase
+        .from('project_boq_items')
+        .select('id,unit_price')
+        .in('id', boqIds);
+      if (boqResult.error) {
+        setMessage(boqResult.error.message);
+        setLoading(false);
+        return;
+      }
+      for (const row of boqResult.data || []) {
+        boqPrices.set(row.id, Number(row.unit_price) || 0);
+      }
+    }
+
+    const hydratedItems = rawItems.map((item) => ({
+      ...item,
+      unit_price:
+        Number(item.unit_price) ||
+        (item.boq_item_id ? boqPrices.get(item.boq_item_id) || 0 : 0),
+    }));
+
     setOrder(orderResult.data as unknown as OrderRow);
     setSites((sitesResult.data || []) as unknown as SiteRelation[]);
-    setItems((itemsResult.data || []) as unknown as ItemRow[]);
+    setItems(hydratedItems);
     setAttachments((attachmentsResult.data || []) as AttachmentRow[]);
     setLoading(false);
   }
@@ -147,15 +175,23 @@ export default function WorkOrderDetailPage({
   }, [items, query]);
 
   const distinctItems = new Set(items.map((item) => item.item_id)).size;
-  const totalQuantity = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-  const totalExecuted = items.reduce(
-    (sum, item) => sum + (Number(item.executed_quantity) || 0),
+  const totalExecutionValue = items.reduce(
+    (sum, item) => sum + (Number(item.total_price) || 0),
     0,
   );
-  const totalRemaining = items.reduce(
-    (sum, item) => sum + (Number(item.remaining_quantity) || 0),
-    0,
-  );
+  const unitsCount = new Set(items.map((item) => item.unit).filter(Boolean)).size;
+  const itemsWithRemaining = items.filter((item) => (Number(item.remaining_quantity) || 0) > 0).length;
+  const quantitiesByUnit = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const item of items) {
+      const unit = item.unit || 'بدون وحدة';
+      totals.set(
+        unit,
+        (totals.get(unit) || 0) + (Number(item.executed_quantity ?? item.quantity) || 0),
+      );
+    }
+    return Array.from(totals.entries()).sort((a, b) => a[0].localeCompare(b[0], 'ar'));
+  }, [items]);
 
   return (
     <main className="page work-order-detail-page">
@@ -218,12 +254,16 @@ export default function WorkOrderDetailPage({
           <span>سجلات بنود</span>
         </div>
         <div className="stat wide">
-          <strong>{totalExecuted.toLocaleString()}</strong>
-          <span>إجمالي الكميات المنفذة في الأمر</span>
+          <strong>{totalExecutionValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}</strong>
+          <span>قيمة التنفيذ قبل الضريبة</span>
         </div>
-        <div className="stat wide">
-          <strong>{totalRemaining.toLocaleString()}</strong>
-          <span>إجمالي رصيد البنود بعد الأمر</span>
+        <div className="stat">
+          <strong>{unitsCount}</strong>
+          <span>وحدات قياس مختلفة</span>
+        </div>
+        <div className="stat">
+          <strong>{itemsWithRemaining}</strong>
+          <span>بنود لها رصيد متبقٍ</span>
         </div>
       </section>
 
@@ -233,6 +273,24 @@ export default function WorkOrderDetailPage({
           كميات أمر العمل لجميع المواقع المرتبطة، وليست توزيعًا مؤكدًا لكل موقع على حدة.
         </div>
       ) : null}
+
+      <section className="section-block work-order-unit-summary">
+        <div className="section-title">
+          <div>
+            <span className="section-kicker">ملخص الكميات</span>
+            <h2>الكميات المنفذة حسب وحدة القياس</h2>
+          </div>
+          <span>{quantitiesByUnit.length} وحدات</span>
+        </div>
+        <div className="unit-summary-grid">
+          {quantitiesByUnit.map(([unit, total]) => (
+            <div className="unit-summary-card" key={unit}>
+              <small>{unit}</small>
+              <b>{total.toLocaleString('en-US', { maximumFractionDigits: 2 })}</b>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="work-order-detail-grid">
         <section className="panel work-order-sites-panel">
@@ -316,11 +374,10 @@ export default function WorkOrderDetailPage({
                 <th>رقم البند</th>
                 <th>البند</th>
                 <th>الوحدة</th>
-                <th>كمية الأمر</th>
-                <th>المنفذ في الأمر</th>
-                <th>المتبقي بعد الأمر</th>
-                <th>سعر الوحدة</th>
-                <th>الإجمالي</th>
+                <th>الكمية المنفذة في الأمر</th>
+                <th>رصيد الكمية بعد الأمر</th>
+                <th>سعر الوحدة قبل الضريبة</th>
+                <th>قيمة التنفيذ قبل الضريبة</th>
               </tr>
             </thead>
             <tbody>
@@ -332,11 +389,10 @@ export default function WorkOrderDetailPage({
                     {item.items?.category ? <small>{item.items.category}</small> : null}
                   </td>
                   <td>{item.unit || '—'}</td>
-                  <td>{Number(item.quantity || 0).toLocaleString()}</td>
-                  <td>{Number(item.executed_quantity || 0).toLocaleString()}</td>
-                  <td>{Number(item.remaining_quantity || 0).toLocaleString()}</td>
-                  <td>{Number(item.unit_price || 0).toLocaleString()}</td>
-                  <td>{Number(item.total_price || 0).toLocaleString()}</td>
+                  <td>{Number(item.executed_quantity ?? item.quantity ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td>{Number(item.remaining_quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td>{Number(item.unit_price || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td>{Number(item.total_price || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
                 </tr>
               ))}
             </tbody>

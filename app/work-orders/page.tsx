@@ -23,13 +23,16 @@ type OrderItemRow = {
   work_order_id: string;
   item_id: string;
   executed_quantity: number | string | null;
+  total_price: number | string | null;
+  unit: string | null;
 };
 
 type EnrichedOrder = OrderRow & {
   sitesCount: number;
   itemsCount: number;
   rowsCount: number;
-  totalExecuted: number;
+  totalExecutionValue: number;
+  unitsCount: number;
 };
 
 const formatDate = (value: string | null) =>
@@ -87,7 +90,7 @@ export default function OrdersPage() {
       supabase.from('work_order_sites').select('work_order_id,site_id'),
       supabase
         .from('work_order_items')
-        .select('id,work_order_id,item_id,executed_quantity'),
+        .select('id,work_order_id,item_id,executed_quantity,total_price,unit'),
     ]);
 
     if (ordersResult.error || sitesResult.error || itemsResult.error) {
@@ -111,7 +114,8 @@ export default function OrdersPage() {
     const siteSets = new Map<string, Set<string>>();
     const itemSets = new Map<string, Set<string>>();
     const rowsCount = new Map<string, number>();
-    const executedTotals = new Map<string, number>();
+    const executionValues = new Map<string, number>();
+    const unitSets = new Map<string, Set<string>>();
 
     for (const row of orderSites) {
       if (!siteSets.has(row.work_order_id)) siteSets.set(row.work_order_id, new Set());
@@ -122,10 +126,12 @@ export default function OrdersPage() {
       if (!itemSets.has(row.work_order_id)) itemSets.set(row.work_order_id, new Set());
       itemSets.get(row.work_order_id)!.add(row.item_id);
       rowsCount.set(row.work_order_id, (rowsCount.get(row.work_order_id) || 0) + 1);
-      executedTotals.set(
+      executionValues.set(
         row.work_order_id,
-        (executedTotals.get(row.work_order_id) || 0) + (Number(row.executed_quantity) || 0),
+        (executionValues.get(row.work_order_id) || 0) + (Number(row.total_price) || 0),
       );
+      if (!unitSets.has(row.work_order_id)) unitSets.set(row.work_order_id, new Set());
+      if (row.unit) unitSets.get(row.work_order_id)!.add(row.unit);
     }
 
     return orders.map((order) => ({
@@ -133,7 +139,8 @@ export default function OrdersPage() {
       sitesCount: siteSets.get(order.id)?.size || 0,
       itemsCount: itemSets.get(order.id)?.size || 0,
       rowsCount: rowsCount.get(order.id) || 0,
-      totalExecuted: executedTotals.get(order.id) || 0,
+      totalExecutionValue: executionValues.get(order.id) || 0,
+      unitsCount: unitSets.get(order.id)?.size || 0,
     }));
   }, [orders, orderSites, orderItems]);
 
@@ -169,8 +176,8 @@ export default function OrdersPage() {
   const totalSites = new Set(orderSites.map((row) => row.site_id)).size;
   const totalDistinctItems = new Set(orderItems.map((row) => row.item_id)).size;
   const totalRows = orderItems.length;
-  const totalExecuted = orderItems.reduce(
-    (sum, row) => sum + (Number(row.executed_quantity) || 0),
+  const totalExecutionValue = orderItems.reduce(
+    (sum, row) => sum + (Number(row.total_price) || 0),
     0,
   );
 
@@ -204,8 +211,8 @@ export default function OrdersPage() {
           <span>سجلات بنود الأوامر</span>
         </div>
         <div className="stat wide">
-          <strong>{totalExecuted.toLocaleString()}</strong>
-          <span>إجمالي كميات سجلات الأوامر</span>
+          <strong>{totalExecutionValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}</strong>
+          <span>إجمالي قيمة التنفيذ قبل الضريبة</span>
         </div>
       </section>
 
@@ -286,8 +293,8 @@ export default function OrdersPage() {
                   <b>{order.rowsCount}</b>
                 </span>
                 <span>
-                  <small>إجمالي الكميات</small>
-                  <b>{order.totalExecuted.toLocaleString()}</b>
+                  <small>قيمة التنفيذ قبل الضريبة</small>
+                  <b>{order.totalExecutionValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}</b>
                 </span>
               </div>
 
