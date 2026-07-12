@@ -90,7 +90,7 @@ function detectDataRows(rows: unknown[][], headerRow: number) {
 }
 
 export function parseAfnanMatrixWorkbook(buffer: ArrayBuffer): SmartWorkbook {
-  const wb = XLSX.read(buffer, { type: 'array', cellDates: true, raw: true });
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: false, raw: true });
   const sheetName = wb.SheetNames[0];
   if (!sheetName) throw new Error('ملف Excel لا يحتوي على أوراق عمل.');
   const ws = wb.Sheets[sheetName];

@@ -28,11 +28,15 @@ export function excelDateToISO(value: any) {
     return datePartsToISO(value.getFullYear(), value.getMonth() + 1, value.getDate());
   }
 
-  // Excel serial dates are calendar days, not timestamps. Convert with UTC and
-  // read UTC parts so the browser timezone never changes the date.
+  // Excel serial dates are calendar days, not timestamps. Decode the serial
+  // directly instead of creating a JavaScript Date, so timezone conversion can
+  // never move the calendar day backward or forward.
   if (typeof value === 'number' && Number.isFinite(value)) {
-    const utcMilliseconds = Math.round((value - 25569) * 86400 * 1000);
-    const date = new Date(utcMilliseconds);
+    // Excel's 1900 date system includes the historical leap-year bug. This
+    // conversion preserves the exact calendar date stored in the workbook.
+    const wholeDays = Math.floor(value);
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    const date = new Date(excelEpoch + wholeDays * 86400 * 1000);
     return datePartsToISO(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
   }
 
