@@ -19,7 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </Link>
           <nav className="nav">
-            <Link href="/">الرئيسية</Link>
+            <Link href="/">مركز المعرفة</Link>
+            <Link href="/projects">المشاريع</Link>
+            <Link href="/sites">المواقع</Link>
+            <Link href="/work-orders">أوامر العمل</Link>
             <Link href="/import">استيراد Excel</Link>
           </nav>
         </header>
