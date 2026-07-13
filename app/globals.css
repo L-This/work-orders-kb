@@ -220,3 +220,144 @@
   .work-order-hero-main h1{font-size:25px}
   .work-order-detail-stats{grid-template-columns:1fr}
 }
+
+/* V13 — cleaner work-order header and denser responsive items table */
+.work-order-detail-title{
+  min-height:0;
+  padding-bottom:8px;
+}
+.work-order-detail-title>div:first-child{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.work-order-detail-title .eyebrow{
+  margin:0;
+}
+.work-order-detail-title .muted{
+  margin:0;
+  max-width:760px;
+  font-size:15px;
+  line-height:1.6;
+}
+.work-order-hero-main h1{
+  margin-top:0;
+}
+
+.work-order-items-section .search{
+  margin-bottom:12px;
+}
+.work-order-items-section .table-wrap{
+  max-height:680px;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:#fff;
+}
+.work-order-items-table{
+  width:100%;
+  min-width:980px;
+  table-layout:fixed;
+  border-collapse:separate;
+  border-spacing:0;
+}
+.work-order-items-table thead th{
+  position:sticky;
+  top:0;
+  z-index:3;
+  background:#f7efd9;
+  box-shadow:0 1px 0 var(--line);
+  padding:13px 10px;
+  font-size:13px;
+  line-height:1.35;
+  white-space:normal;
+}
+.work-order-items-table tbody td{
+  padding:12px 10px;
+  vertical-align:middle;
+  font-size:13px;
+  line-height:1.55;
+}
+.work-order-items-table tbody tr:nth-child(even){
+  background:#fffdf8;
+}
+.work-order-items-table tbody tr:hover{
+  background:#fbf4e2;
+}
+.work-order-items-table th:nth-child(1),
+.work-order-items-table td:nth-child(1){width:72px;text-align:center}
+.work-order-items-table th:nth-child(2),
+.work-order-items-table td:nth-child(2){width:42%}
+.work-order-items-table th:nth-child(3),
+.work-order-items-table td:nth-child(3){width:78px;text-align:center}
+.work-order-items-table th:nth-child(n+4),
+.work-order-items-table td:nth-child(n+4){width:120px;text-align:center;font-variant-numeric:tabular-nums}
+.work-order-item-description b{
+  display:block;
+  color:var(--green);
+  font-size:14px;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.work-order-item-description small{
+  display:block;
+  margin-top:4px;
+  color:var(--muted);
+  font-size:11px;
+}
+
+@media(max-width:760px){
+  .work-order-detail-title{
+    gap:12px;
+  }
+  .work-order-items-section .table-wrap{
+    max-height:none;
+    overflow:visible;
+    border:0;
+    background:transparent;
+  }
+  .work-order-items-table,
+  .work-order-items-table thead,
+  .work-order-items-table tbody,
+  .work-order-items-table tr,
+  .work-order-items-table th,
+  .work-order-items-table td{
+    display:block;
+    width:100%!important;
+    min-width:0;
+  }
+  .work-order-items-table thead{display:none}
+  .work-order-items-table{
+    min-width:0;
+    border-collapse:separate;
+  }
+  .work-order-items-table tbody{
+    display:grid;
+    gap:12px;
+  }
+  .work-order-items-table tbody tr{
+    padding:14px;
+    border:1px solid var(--line);
+    border-radius:18px;
+    background:#fff;
+    box-shadow:0 8px 20px rgba(16,63,51,.06);
+  }
+  .work-order-items-table tbody td{
+    position:relative;
+    display:grid;
+    grid-template-columns:minmax(110px,38%) 1fr;
+    gap:10px;
+    align-items:start;
+    padding:8px 0;
+    text-align:right!important;
+    border-bottom:1px solid #eee3ca;
+  }
+  .work-order-items-table tbody td:last-child{border-bottom:0}
+  .work-order-items-table tbody td::before{
+    content:attr(data-label);
+    color:var(--muted);
+    font-size:11px;
+    font-weight:700;
+  }
+  .work-order-item-description b{font-size:13px}
+}

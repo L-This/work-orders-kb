@@ -198,7 +198,6 @@ export default function WorkOrderDetailPage({
       <div className="section-title work-order-detail-title">
         <div>
           <span className="eyebrow">تفاصيل أمر العمل</span>
-          <h2>أمر عمل رقم {order?.work_order_number || '—'}</h2>
           <p className="muted">{order?.projects?.name || 'المشروع غير محدد'}</p>
         </div>
         <div className="actions">
@@ -383,16 +382,16 @@ export default function WorkOrderDetailPage({
             <tbody>
               {filteredItems.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.item_no || '—'}</td>
-                  <td>
+                  <td data-label="رقم البند">{item.item_no || '—'}</td>
+                  <td data-label="البند" className="work-order-item-description">
                     <b>{item.items?.name || 'بند غير معروف'}</b>
                     {item.items?.category ? <small>{item.items.category}</small> : null}
                   </td>
-                  <td>{item.unit || '—'}</td>
-                  <td>{Number(item.executed_quantity ?? item.quantity ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
-                  <td>{Number(item.remaining_quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
-                  <td>{Number(item.unit_price || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
-                  <td>{Number(item.total_price || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td data-label="الوحدة">{item.unit || '—'}</td>
+                  <td data-label="الكمية المنفذة">{Number(item.executed_quantity ?? item.quantity ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td data-label="الرصيد بعد الأمر">{Number(item.remaining_quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td data-label="سعر الوحدة">{Number(item.unit_price || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td data-label="قيمة التنفيذ">{Number(item.total_price || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
                 </tr>
               ))}
             </tbody>
