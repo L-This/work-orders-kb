@@ -25,6 +25,7 @@ type OrderItemRow = {
   executed_quantity: number | string | null;
   total_price: number | string | null;
   unit: string | null;
+  remaining_quantity: number | string | null;
 };
 
 type EnrichedOrder = OrderRow & {
@@ -33,6 +34,8 @@ type EnrichedOrder = OrderRow & {
   rowsCount: number;
   totalExecutionValue: number;
   unitsCount: number;
+  itemsWithRemaining: number;
+  quantitiesByUnit: Array<[string, number]>;
 };
 
 const formatDate = (value: string | null) =>
@@ -90,7 +93,7 @@ export default function OrdersPage() {
       supabase.from('work_order_sites').select('work_order_id,site_id'),
       supabase
         .from('work_order_items')
-        .select('id,work_order_id,item_id,executed_quantity,total_price,unit'),
+        .select('id,work_order_id,item_id,executed_quantity,remaining_quantity,total_price,unit'),
     ]);
 
     if (ordersResult.error || sitesResult.error || itemsResult.error) {
@@ -116,6 +119,8 @@ export default function OrdersPage() {
     const rowsCount = new Map<string, number>();
     const executionValues = new Map<string, number>();
     const unitSets = new Map<string, Set<string>>();
+    const remainingCounts = new Map<string, number>();
+    const quantitiesByOrderUnit = new Map<string, Map<string, number>>();
 
     for (const row of orderSites) {
       if (!siteSets.has(row.work_order_id)) siteSets.set(row.work_order_id, new Set());
@@ -132,6 +137,21 @@ export default function OrdersPage() {
       );
       if (!unitSets.has(row.work_order_id)) unitSets.set(row.work_order_id, new Set());
       if (row.unit) unitSets.get(row.work_order_id)!.add(row.unit);
+
+      const remainingQuantity = Number((row as OrderItemRow & { remaining_quantity?: number | string | null }).remaining_quantity) || 0;
+      if (remainingQuantity > 0) {
+        remainingCounts.set(row.work_order_id, (remainingCounts.get(row.work_order_id) || 0) + 1);
+      }
+
+      const unit = row.unit || 'بدون وحدة';
+      if (!quantitiesByOrderUnit.has(row.work_order_id)) {
+        quantitiesByOrderUnit.set(row.work_order_id, new Map());
+      }
+      const unitMap = quantitiesByOrderUnit.get(row.work_order_id)!;
+      unitMap.set(
+        unit,
+        (unitMap.get(unit) || 0) + (Number(row.executed_quantity) || 0),
+      );
     }
 
     return orders.map((order) => ({
@@ -141,6 +161,10 @@ export default function OrdersPage() {
       rowsCount: rowsCount.get(order.id) || 0,
       totalExecutionValue: executionValues.get(order.id) || 0,
       unitsCount: unitSets.get(order.id)?.size || 0,
+      itemsWithRemaining: remainingCounts.get(order.id) || 0,
+      quantitiesByUnit: Array.from(quantitiesByOrderUnit.get(order.id)?.entries() || []).sort(
+        (a, b) => a[0].localeCompare(b[0], 'ar'),
+      ),
     }));
   }, [orders, orderSites, orderItems]);
 
@@ -180,6 +204,10 @@ export default function OrdersPage() {
     (sum, row) => sum + (Number(row.total_price) || 0),
     0,
   );
+  const totalUnits = new Set(orderItems.map((row) => row.unit).filter(Boolean)).size;
+  const totalRemainingRows = orderItems.filter(
+    (row) => (Number(row.remaining_quantity) || 0) > 0,
+  ).length;
 
   return (
     <main className="page orders-page">
@@ -209,6 +237,14 @@ export default function OrdersPage() {
         <div className="stat">
           <strong>{totalRows}</strong>
           <span>سجلات بنود الأوامر</span>
+        </div>
+        <div className="stat">
+          <strong>{totalUnits}</strong>
+          <span>وحدات قياس مختلفة</span>
+        </div>
+        <div className="stat">
+          <strong>{totalRemainingRows}</strong>
+          <span>سجلات لها رصيد متبقٍ</span>
         </div>
         <div className="stat wide">
           <strong>{totalExecutionValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}</strong>
@@ -281,7 +317,7 @@ export default function OrdersPage() {
 
               <div className="work-order-card-metrics">
                 <span>
-                  <small>المواقع</small>
+                  <small>المواقع المرتبطة</small>
                   <b>{order.sitesCount}</b>
                 </span>
                 <span>
@@ -293,9 +329,26 @@ export default function OrdersPage() {
                   <b>{order.rowsCount}</b>
                 </span>
                 <span>
+                  <small>وحدات القياس</small>
+                  <b>{order.unitsCount}</b>
+                </span>
+                <span>
+                  <small>بنود لها رصيد متبقٍ</small>
+                  <b>{order.itemsWithRemaining}</b>
+                </span>
+                <span>
                   <small>قيمة التنفيذ قبل الضريبة</small>
                   <b>{order.totalExecutionValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}</b>
                 </span>
+              </div>
+
+              <div className="work-order-unit-chips">
+                {order.quantitiesByUnit.map(([unit, quantity]) => (
+                  <span key={unit}>
+                    <small>{unit}</small>
+                    <b>{quantity.toLocaleString('en-US', { maximumFractionDigits: 2 })}</b>
+                  </span>
+                ))}
               </div>
 
               <div className="work-order-card-action">فتح تفاصيل أمر العمل ←</div>

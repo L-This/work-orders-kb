@@ -46,3 +46,14 @@
 .unit-summary-card { border: 1px solid rgba(196, 151, 58, .28); background: rgba(255,255,255,.64); border-radius: 20px; padding: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .unit-summary-card small { color: #77705f; }
 .unit-summary-card b { color: #074d3e; font-size: 1.35rem; }
+
+/* V11 - Historical work-order cards use the same number semantics as details */
+.work-orders-stats{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.work-order-card{min-height:430px}
+.work-order-card-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.work-order-card-metrics span:last-child{grid-column:1/-1;background:#f4edda}
+.work-order-unit-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;padding-top:12px;border-top:1px dashed #e8d9b5}
+.work-order-unit-chips span{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:92px;padding:8px 10px;border:1px solid #eadbb8;border-radius:12px;background:#fffaf0}
+.work-order-unit-chips small{color:var(--muted);font-size:10px}
+.work-order-unit-chips b{color:var(--green);font-size:13px}
+@media(max-width:650px){.work-order-card{min-height:0}.work-order-card-metrics{grid-template-columns:1fr 1fr}}
