@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { excelDateToISO, normalizeArabic, toNumber } from './helpers';
+import { calculateDurationDays } from './work-order-timing';
 
 export type ParsedProject = {
   name: string;
@@ -26,6 +27,7 @@ export type ParsedWorkOrder = {
   number: string;
   startDate: string | null;
   endDate: string | null;
+  durationDays: number | null;
   status: string;
   sites: string[];
   items: Array<{
@@ -279,6 +281,7 @@ export function parseWorkOrdersMatrixWorkbook(buffer: ArrayBuffer): SmartWorkboo
       number: orderColumn.number,
       startDate: start,
       endDate: end,
+      durationDays: calculateDurationDays(start, end),
       status: normalized(statusText).includes('انتهاء') || normalized(statusText).includes('مكتمل') ? 'completed' : 'approved',
       sites,
       items,

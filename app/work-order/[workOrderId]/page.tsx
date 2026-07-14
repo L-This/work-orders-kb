@@ -4,12 +4,15 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { parseDateOnly } from '@/lib/helpers';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { getWorkOrderTiming } from '@/lib/work-order-timing';
 
 type OrderRow = {
   id: string;
   project_id: string;
   work_order_number: string;
   work_order_date: string | null;
+  work_order_end_date: string | null;
+  duration_days: number | null;
   title: string | null;
   status: string | null;
   contractor_name: string | null;
@@ -94,7 +97,7 @@ export default function WorkOrderDetailPage({
       supabase
         .from('work_orders')
         .select(
-          'id,project_id,work_order_number,work_order_date,title,status,contractor_name,notes,source_file_name,projects(id,name)',
+          'id,project_id,work_order_number,work_order_date,work_order_end_date,duration_days,title,status,contractor_name,notes,source_file_name,projects(id,name)',
         )
         .eq('id', params.workOrderId)
         .single(),
@@ -181,6 +184,7 @@ export default function WorkOrderDetailPage({
   );
   const unitsCount = new Set(items.map((item) => item.unit).filter(Boolean)).size;
   const itemsWithRemaining = items.filter((item) => (Number(item.remaining_quantity) || 0) > 0).length;
+  const timing = getWorkOrderTiming(order?.work_order_date, order?.work_order_end_date);
   const quantitiesByUnit = useMemo(() => {
     const totals = new Map<string, number>();
     for (const item of items) {
@@ -221,12 +225,17 @@ export default function WorkOrderDetailPage({
         <div className="work-order-hero-main">
           <span className="badge">{statusLabel(order?.status || null)}</span>
           <h1>{order?.title || `أمر عمل رقم ${order?.work_order_number || ''}`}</h1>
-          <p>{order?.notes || 'لا توجد ملاحظات مسجلة لهذا الأمر.'}</p>
+          <p>{order?.projects?.name || 'المشروع غير محدد'}</p>
+          <div className={`work-order-live-counter ${timing.tone}`}><strong>{timing.label}</strong><span>{order?.duration_days ? `المدة الكاملة: ${order.duration_days} يوم` : 'المدة الكاملة غير محددة'}</span></div>
         </div>
         <div className="work-order-meta-panel">
           <span>
-            <small>تاريخ الأمر</small>
+            <small>تاريخ بداية الأمر</small>
             <b>{formatDate(order?.work_order_date || null)}</b>
+          </span>
+          <span>
+            <small>تاريخ انتهاء الأمر</small>
+            <b>{formatDate(order?.work_order_end_date || null)}</b>
           </span>
           <span>
             <small>المقاول</small>

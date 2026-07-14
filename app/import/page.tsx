@@ -207,10 +207,12 @@ export default function ImportPage() {
           contract_id: contractId,
           work_order_number: workOrderNumber,
           work_order_date: order.startDate,
+          work_order_end_date: order.endDate,
+          duration_days: order.durationDays,
           title: `أمر عمل رقم ${workOrderNumber}`,
           status: order.status,
           contractor_name: data.project.contractorName || null,
-          notes: order.endDate ? `تاريخ الانتهاء: ${order.endDate}` : null,
+          notes: null,
           source_file_name: fileName,
         };
         let workOrderId = existing.data?.id as string | undefined;
@@ -382,6 +384,8 @@ export default function ImportPage() {
                   </div>
                   <div className="import-order-data">
                     <p><small>تاريخ البدء</small><b>{order.startDate || 'غير مذكور'}</b></p>
+                    <p><small>تاريخ الانتهاء</small><b>{order.endDate || 'غير مذكور'}</b></p>
+                    <p><small>مدة أمر العمل</small><b>{order.durationDays !== null ? `${order.durationDays} يوم` : 'غير محددة'}</b></p>
                     <p><small>المواقع</small><b>{order.sites.length}</b></p>
                     <p><small>البنود المنفذة</small><b>{order.items.length}</b></p>
                   </div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { parseDateOnly } from '@/lib/helpers';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { getWorkOrderTiming } from '@/lib/work-order-timing';
 
 type ProjectRow = { id: string; name: string };
 type OrderRow = {
@@ -11,6 +12,8 @@ type OrderRow = {
   project_id: string;
   work_order_number: string;
   work_order_date: string | null;
+  work_order_end_date: string | null;
+  duration_days: number | null;
   title: string | null;
   status: string | null;
   contractor_name: string | null;
@@ -86,7 +89,7 @@ export default function OrdersPage() {
       supabase
         .from('work_orders')
         .select(
-          'id,project_id,work_order_number,work_order_date,title,status,contractor_name,notes,projects(id,name)',
+          'id,project_id,work_order_number,work_order_date,work_order_end_date,duration_days,title,status,contractor_name,notes,projects(id,name)',
         )
         .order('work_order_date', { ascending: false, nullsFirst: false })
         .order('work_order_number', { ascending: false }),
@@ -309,7 +312,8 @@ export default function OrdersPage() {
               </div>
 
               <div className="work-order-card-body">
-                <span className="order-date">{formatDate(order.work_order_date)}</span>
+                {(() => { const timing = getWorkOrderTiming(order.work_order_date, order.work_order_end_date); return <div className={`work-order-timing-banner ${timing.tone}`}><b>{timing.compactLabel}</b>{order.duration_days ? <small>مدة الأمر: {order.duration_days} يوم</small> : null}</div>; })()}
+                <span className="order-date">{formatDate(order.work_order_date)} — {formatDate(order.work_order_end_date)}</span>
                 <h3>{order.title || `أمر عمل رقم ${order.work_order_number}`}</h3>
                 <p>{order.projects?.name || 'مشروع غير محدد'}</p>
                 <small>{order.contractor_name || 'المقاول غير مذكور'}</small>

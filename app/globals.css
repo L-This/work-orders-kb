@@ -372,3 +372,37 @@
   font-weight: 700;
   font-size: 0.78rem;
 }
+
+/* Work-order schedule and countdown */
+.import-order-data { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.work-order-timing-banner,
+.work-order-live-counter {
+  border: 1px solid rgba(13, 79, 62, .14);
+  border-radius: 14px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255,255,255,.72);
+}
+.work-order-timing-banner { margin-bottom: 8px; font-size: .82rem; }
+.work-order-timing-banner small,
+.work-order-live-counter span { color: var(--muted); }
+.work-order-timing-banner.warning,
+.work-order-live-counter.warning { background: #fff3cf; border-color: rgba(190,139,28,.3); }
+.work-order-timing-banner.success,
+.work-order-live-counter.success { background: #edf8f1; border-color: rgba(30,130,78,.25); }
+.work-order-timing-banner.muted,
+.work-order-live-counter.muted { background: #f3f1eb; color: #777066; }
+.work-order-live-counter { margin-top: 12px; max-width: 560px; }
+.work-order-live-counter strong { font-size: 1.05rem; }
+.work-order-meta-panel { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1000px) {
+  .import-order-data { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .work-order-meta-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .work-order-live-counter { align-items: flex-start; flex-direction: column; }
+  .work-order-meta-panel { grid-template-columns: 1fr; }
+}
