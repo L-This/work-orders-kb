@@ -226,7 +226,15 @@ export default function WorkOrderDetailPage({
           <span className="badge">{statusLabel(order?.status || null)}</span>
           <h1>{order?.title || `أمر عمل رقم ${order?.work_order_number || ''}`}</h1>
           <p>{order?.projects?.name || 'المشروع غير محدد'}</p>
-          <div className={`work-order-live-counter ${timing.tone}`}><strong>{timing.label}</strong><span>{order?.duration_days ? `المدة الكاملة: ${order.duration_days} يوم` : 'المدة الكاملة غير محددة'}</span></div>
+          <div className={`work-order-live-counter ${timing.tone}`}>
+            <div className="timing-label-row"><strong>{timing.label}</strong><span>{order?.duration_days ? `المدة الكاملة: ${order.duration_days} يوم` : 'المدة الكاملة غير محددة'}</span></div>
+            {timing.progressPercent !== null && (
+              <>
+                <div className="timing-progress"><i style={{ width: `${timing.progressPercent}%` }} /></div>
+                <small className="timing-progress-caption">{timing.phase === 'active' ? `نسبة التقدم الزمني ${timing.progressPercent}%` : timing.phase === 'upcoming' ? 'لم تبدأ مدة أمر العمل' : 'اكتملت المدة الزمنية'}</small>
+              </>
+            )}
+          </div>
         </div>
         <div className="work-order-meta-panel">
           <span>

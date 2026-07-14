@@ -312,7 +312,15 @@ export default function OrdersPage() {
               </div>
 
               <div className="work-order-card-body">
-                {(() => { const timing = getWorkOrderTiming(order.work_order_date, order.work_order_end_date); return <div className={`work-order-timing-banner ${timing.tone}`}><b>{timing.compactLabel}</b>{order.duration_days ? <small>مدة الأمر: {order.duration_days} يوم</small> : null}</div>; })()}
+                {(() => {
+                  const timing = getWorkOrderTiming(order.work_order_date, order.work_order_end_date);
+                  return (
+                    <div className={`work-order-timing-banner ${timing.tone}`}>
+                      <div className="timing-label-row"><b>{timing.label}</b>{order.duration_days ? <small>مدة الأمر: {order.duration_days} يوم</small> : null}</div>
+                      {timing.progressPercent !== null && <div className="timing-progress"><i style={{ width: `${timing.progressPercent}%` }} /></div>}
+                    </div>
+                  );
+                })()}
                 <span className="order-date">{formatDate(order.work_order_date)} — {formatDate(order.work_order_end_date)}</span>
                 <h3>{order.title || `أمر عمل رقم ${order.work_order_number}`}</h3>
                 <p>{order.projects?.name || 'مشروع غير محدد'}</p>

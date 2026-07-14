@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { normalizeArabic } from '@/lib/helpers';
 import { parseWorkOrdersMatrixWorkbook, SmartWorkbook } from '@/lib/excel-import';
+import { getWorkOrderTiming } from '@/lib/work-order-timing';
 
 type ImportProgress = {
   step: string;
@@ -376,11 +377,25 @@ export default function ImportPage() {
               <span>{data.workOrders.length} أوامر</span>
             </div>
             <div className="import-orders-grid">
-              {data.workOrders.map(order => (
+              {data.workOrders.map(order => {
+                const timing = getWorkOrderTiming(order.startDate, order.endDate);
+                return (
                 <article className="import-order-card" key={order.number}>
                   <div className="import-order-head">
                     <span>أمر عمل</span>
                     <strong>{order.number}</strong>
+                  </div>
+                  <div className={`import-order-timing ${timing.tone}`}>
+                    <div>
+                      <small>الحالة الزمنية</small>
+                      <b>{timing.label}</b>
+                    </div>
+                    <span>{timing.phase === 'active' && timing.progressPercent !== null ? `اكتمل ${timing.progressPercent}% من المدة` : timing.phase === 'upcoming' ? 'لم يبدأ التنفيذ بعد' : timing.phase === 'ended' ? 'تم تجاوز تاريخ الانتهاء' : 'لا توجد مدة كاملة'}</span>
+                    {timing.progressPercent !== null && (
+                      <div className="timing-progress" aria-label={`نسبة تقدم المدة ${timing.progressPercent}%`}>
+                        <i style={{ width: `${timing.progressPercent}%` }} />
+                      </div>
+                    )}
                   </div>
                   <div className="import-order-data">
                     <p><small>تاريخ البدء</small><b>{order.startDate || 'غير مذكور'}</b></p>
@@ -394,7 +409,8 @@ export default function ImportPage() {
                     {order.sites.length > 5 && <span>+{order.sites.length - 5}</span>}
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </section>
 
