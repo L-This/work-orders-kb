@@ -361,3 +361,14 @@
   }
   .work-order-item-description b{font-size:13px}
 }
+
+.import-parser-badge {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(24, 92, 69, 0.08);
+  color: #185c45;
+  font-weight: 700;
+  font-size: 0.78rem;
+}

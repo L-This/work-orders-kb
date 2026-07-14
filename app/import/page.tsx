@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { normalizeArabic } from '@/lib/helpers';
-import { parseAfnanMatrixWorkbook, SmartWorkbook } from '@/lib/excel-import';
+import { parseWorkOrdersMatrixWorkbook, SmartWorkbook } from '@/lib/excel-import';
 
 type ImportProgress = {
   step: string;
@@ -42,7 +42,7 @@ export default function ImportPage() {
     setError('');
     setStatus('جاري تحليل الملف واكتشاف بنية أوامر العمل...');
     try {
-      const parsed = parseAfnanMatrixWorkbook(await file.arrayBuffer());
+      const parsed = parseWorkOrdersMatrixWorkbook(await file.arrayBuffer());
       setData(parsed);
       setStatus('اكتمل التحليل. راجع الملخص وأوامر العمل قبل اعتماد الاستيراد.');
     } catch (e: any) {
@@ -65,7 +65,7 @@ export default function ImportPage() {
       : await supabase.from('projects').select('id,name').eq('name', parsed.project.name).maybeSingle();
     if (existing.error) throw existing.error;
     if (existing.data?.id) {
-      const updatePayload = { ...payload, name: existing.data.name || parsed.project.name };
+      const updatePayload = payload;
       const update = await supabase.from('projects').update(updatePayload).eq('id', existing.data.id);
       if (update.error) throw update.error;
       return existing.data.id as string;
@@ -316,12 +316,12 @@ export default function ImportPage() {
       <div className="page-heading">
         <span className="section-kicker">إدارة المشاريع</span>
         <h1>استيراد مشروع من Excel</h1>
-        <p>يقرأ النظام قالب جدول الكميات، يستخرج المشروع والعقد والمواقع وأوامر العمل والبنود، ثم يعرض لك مراجعة كاملة قبل الكتابة في القاعدة.</p>
+        <p>يقرأ النظام قوالب جداول الكميات متعددة المشاريع، ويكتشف مواقع أعمدة أوامر العمل تلقائيًا، ثم يعرض مراجعة كاملة قبل الكتابة في القاعدة.</p>
       </div>
 
       <div className="steps import-steps">
         <span className={`step ${fileName ? 'active' : ''}`}>1 رفع الملف</span>
-        <span className={`step ${data ? 'active' : ''}`}>2 التحليل الذكي</span>
+        <span className={`step ${data ? 'active' : ''}`}>2 التحليل العام</span>
         <span className={`step ${data ? 'active' : ''}`}>3 المراجعة</span>
         <span className={`step ${imported ? 'active' : ''}`}>4 الاعتماد</span>
       </div>
@@ -330,7 +330,7 @@ export default function ImportPage() {
         <input id="excel-file" type="file" accept=".xlsx,.xls" onChange={onFile} />
         <label htmlFor="excel-file">
           <span className="upload-icon">XL</span>
-          <strong>{fileName || 'اختر ملف جدول الكميات وأوامر العمل'}</strong>
+          <strong>{fileName || 'اختر ملف أي مشروع من جداول الكميات وأوامر العمل'}</strong>
           <small>الملفات المدعومة: XLSX و XLS — تتم القراءة داخل المتصفح ولا يُحفظ الملف قبل الاعتماد.</small>
         </label>
       </section>
@@ -344,7 +344,7 @@ export default function ImportPage() {
             <div>
               <span className="section-kicker">بيانات المشروع المكتشفة</span>
               <h2>{data.project.name}</h2>
-              <p>{data.project.municipality || 'البلدية غير مذكورة'} · {data.project.contractorName || 'المقاول غير مذكور'}</p>
+              <p>{data.project.municipality || 'البلدية غير مذكورة'} · {data.project.contractorName || 'المقاول غير مذكور'}</p><small className="import-parser-badge">محلل عام متعدد المشاريع · {data.parser}</small>
             </div>
             <div className="project-meta-grid">
               <span><small>رقم المشروع</small><b>{data.project.code || '—'}</b></span>
