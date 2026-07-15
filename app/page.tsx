@@ -85,6 +85,17 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' }).format(parseDateOnly(value));
 }
 
+function compactProjectName(name: string) {
+  const cleaned = name
+    .replace(/مشروع\s+/g, '')
+    .replace(/محافظة\s+جدة\s*[-–—]?\s*/g, '')
+    .replace(/بلدية\s+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return cleaned.length > 74 ? `${cleaned.slice(0, 71).trim()}…` : cleaned;
+}
+
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [recentOrders, setRecentOrders] = useState<WorkOrder[]>([]);
@@ -246,7 +257,10 @@ export default function Home() {
             {projects.slice(0, 6).map((project, index) => (
               <Link href={`/project/${project.id}`} className="dashboard-project-row" key={project.id}>
                 <span className="project-index">{String(index + 1).padStart(2, '0')}</span>
-                <div><b>{project.name}</b><small>{project.contractor_name || project.municipality || 'لا توجد بيانات إضافية'}</small></div>
+                <div>
+                  <b title={project.name}>{compactProjectName(project.name)}</b>
+                  <small>{[project.municipality, project.contractor_name].filter(Boolean).join(' · ') || 'لا توجد بيانات إضافية'}</small>
+                </div>
                 <span className="project-open">فتح ←</span>
               </Link>
             ))}

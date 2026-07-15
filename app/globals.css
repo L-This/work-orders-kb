@@ -491,3 +491,24 @@ body{margin:0;background:var(--shell-bg)}
 @media(max-width:1100px){.dashboard-kpis,.status-overview-grid{grid-template-columns:repeat(2,1fr)}.dashboard-two-column,.dashboard-bottom-grid{grid-template-columns:1fr}.dashboard-decision-strip{grid-template-columns:1fr}}
 @media(max-width:650px){.dashboard-welcome{padding:24px;align-items:flex-start;flex-direction:column}.dashboard-kpis,.status-overview-grid{grid-template-columns:1fr 1fr}.dashboard-section{padding:18px}.dashboard-project-row{grid-template-columns:44px minmax(0,1fr)}.project-open{display:none}.dashboard-alert{grid-template-columns:10px minmax(0,1fr)}.dashboard-alert>strong{grid-column:2}.dashboard-decision-strip{gap:12px}}
 @media(max-width:430px){.dashboard-kpis,.status-overview-grid{grid-template-columns:1fr}}
+
+/* === DASHBOARD FINAL DENSITY PASS V19 === */
+.executive-dashboard{gap:14px}
+.dashboard-section{padding:20px 22px}
+.dashboard-section-head{margin-bottom:12px}
+.dashboard-project-row{min-height:60px;padding:8px 12px}
+.dashboard-project-row b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45}
+.dashboard-project-row small{font-size:11px}
+.alerts-panel{align-self:start}
+.alerts-panel .dashboard-section-head{margin-bottom:10px}
+.dashboard-clear-state{min-height:104px;padding:18px;border-radius:16px}
+.dashboard-clear-state b{font-size:15px}
+.dashboard-clear-state span{font-size:11px;line-height:1.55}
+.dashboard-bottom-grid .dashboard-section{padding-block:18px}
+.dashboard-activity-list{gap:0}
+.dashboard-activity-row{min-height:50px;padding:6px 8px;gap:10px}
+.dashboard-activity-row b{font-size:13px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dashboard-activity-row small{font-size:10px}
+.dashboard-activity-row .activity-number,.dashboard-activity-row .import-mini-status{width:38px;height:38px;border-radius:11px}
+.dashboard-decision-strip{padding:16px 20px}
+@media(max-width:650px){.dashboard-section{padding:16px}.dashboard-clear-state{min-height:92px}.dashboard-project-row{min-height:58px}}
