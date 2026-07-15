@@ -4,6 +4,7 @@ import { parseDateOnly } from '@/lib/helpers';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getWorkOrderTiming } from '@/lib/work-order-timing';
 
 type Project = {
   id: string;
@@ -21,6 +22,8 @@ type WorkOrder = {
   work_order_date: string | null;
   title: string | null;
   status: string | null;
+  work_order_end_date: string | null;
+  duration_days: number | null;
   projects: { name: string } | null;
 };
 
@@ -122,7 +125,7 @@ export default function Home() {
       supabase.from('items').select('id', { count: 'exact', head: true }),
       supabase
         .from('work_orders')
-        .select('id,project_id,work_order_number,work_order_date,title,status,projects(name)')
+        .select('id,project_id,work_order_number,work_order_date,title,status,work_order_end_date,duration_days,projects(name)')
         .order('work_order_date', { ascending: false, nullsFirst: false })
         .limit(6),
       supabase
@@ -170,170 +173,137 @@ export default function Home() {
     setLoading(false);
   }
 
-  const filteredItems = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase('ar');
-    if (!normalized) return items.slice(0, 12);
-    return items.filter((item) =>
-      `${item.item_name} ${item.category || ''} ${item.unit || ''}`
-        .toLocaleLowerCase('ar')
-        .includes(normalized),
-    );
-  }, [items, query]);
-
   const totalRemaining = useMemo(
     () => items.reduce((sum, item) => sum + number(item.total_remaining_quantity), 0),
     [items],
   );
 
-  return (
-    <main className="page knowledge-page">
-      {!isSupabaseConfigured && (
-        <div className="notice">
-          لم يتم ربط Supabase بعد. أضف في Vercel المتغيرين <b>NEXT_PUBLIC_SUPABASE_URL</b> و{' '}
-          <b>NEXT_PUBLIC_SUPABASE_ANON_KEY</b>.
-        </div>
-      )}
+  const orderTiming = useMemo(() => recentOrders.map((order) => ({
+    order,
+    timing: getWorkOrderTiming(order.work_order_date, order.work_order_end_date),
+  })), [recentOrders]);
 
+  const timingCounts = useMemo(() => ({
+    active: orderTiming.filter(({ timing }) => timing.phase === 'active').length,
+    upcoming: orderTiming.filter(({ timing }) => timing.phase === 'upcoming' && (timing.days ?? 9999) <= 30).length,
+    endingSoon: orderTiming.filter(({ timing }) => timing.phase === 'active' && (timing.days ?? 9999) <= 30).length,
+    ended: orderTiming.filter(({ timing }) => timing.phase === 'ended').length,
+  }), [orderTiming]);
+
+  const alerts = useMemo(() => orderTiming
+    .filter(({ timing }) =>
+      (timing.phase === 'upcoming' && (timing.days ?? 9999) <= 30) ||
+      (timing.phase === 'active' && (timing.days ?? 9999) <= 30)
+    )
+    .slice(0, 5), [orderTiming]);
+
+  return (
+    <main className="page executive-dashboard">
+      {!isSupabaseConfigured && (
+        <div className="notice">لم يتم ربط Supabase بعد. أضف متغيرات الاتصال في Vercel.</div>
+      )}
       {error && <div className="notice error-notice">تعذر تحميل بعض البيانات: {error}</div>}
 
-      <section className="knowledge-hero">
+      <section className="dashboard-welcome">
         <div>
-          <span className="eyebrow">مركز المعرفة</span>
-          <h1>كل مشروع، وكل موقع، وكل أمر عمل في مرجع واحد</h1>
-          <p>
-            راجع تاريخ المواقع، ابحث في البنود والكميات، وتحقق من الرصيد المتبقي قبل إصدار أي أمر عمل جديد.
-          </p>
-          <div className="actions">
-            <Link className="btn primary" href="/import">استيراد ملف Excel</Link>
-            <Link className="btn" href="/projects">فتح المشاريع</Link>
-            <button className="btn" onClick={() => void loadDashboard()} disabled={loading}>
-              {loading ? 'جاري التحديث...' : 'تحديث البيانات'}
-            </button>
+          <span className="eyebrow">لوحة القيادة</span>
+          <h1>نظرة تشغيلية على منظومة أوامر العمل</h1>
+          <p>ملخص مباشر للمشاريع، أوامر العمل، المواعيد والتنبيهات التي تحتاج متابعة.</p>
+        </div>
+        <div className="dashboard-welcome-actions">
+          <button className="btn" onClick={() => void loadDashboard()} disabled={loading}>{loading ? 'جاري التحديث...' : 'تحديث البيانات'}</button>
+          <Link className="btn primary" href="/projects">فتح المشاريع</Link>
+        </div>
+      </section>
+
+      <section className="dashboard-kpis">
+        <Link href="/projects" className="dashboard-kpi"><small>المشاريع</small><strong>{counts.projects}</strong><span>مشروع مسجل</span></Link>
+        <Link href="/sites" className="dashboard-kpi"><small>المواقع</small><strong>{counts.sites}</strong><span>موقع مرتبط بالمشاريع</span></Link>
+        <Link href="/work-orders" className="dashboard-kpi"><small>أوامر العمل</small><strong>{counts.workOrders}</strong><span>أمر في السجل</span></Link>
+        <Link href="/items" className="dashboard-kpi"><small>قاموس البنود</small><strong>{counts.items}</strong><span>بند موحد قابل للبحث</span></Link>
+      </section>
+
+      <section className="dashboard-section">
+        <div className="dashboard-section-head">
+          <div><span className="section-kicker">المتابعة الزمنية</span><h2>حالة أوامر العمل</h2></div>
+          <Link href="/work-orders" className="text-link">عرض السجل الكامل</Link>
+        </div>
+        <div className="status-overview-grid">
+          <article className="status-overview active"><span>جارية الآن</span><strong>{timingCounts.active}</strong><small>أوامر ضمن فترة التنفيذ</small></article>
+          <article className="status-overview upcoming"><span>تبدأ قريبًا</span><strong>{timingCounts.upcoming}</strong><small>خلال 30 يومًا</small></article>
+          <article className="status-overview warning"><span>قريبة من الانتهاء</span><strong>{timingCounts.endingSoon}</strong><small>متبقٍ 30 يومًا أو أقل</small></article>
+          <article className="status-overview ended"><span>منتهية</span><strong>{timingCounts.ended}</strong><small>ضمن أحدث الأوامر المحملة</small></article>
+        </div>
+      </section>
+
+      <section className="dashboard-two-column">
+        <div className="dashboard-section">
+          <div className="dashboard-section-head">
+            <div><span className="section-kicker">المشاريع</span><h2>المشاريع المسجلة</h2></div>
+            <Link href="/projects" className="text-link">عرض الكل</Link>
+          </div>
+          <div className="dashboard-project-list">
+            {projects.slice(0, 6).map((project, index) => (
+              <Link href={`/project/${project.id}`} className="dashboard-project-row" key={project.id}>
+                <span className="project-index">{String(index + 1).padStart(2, '0')}</span>
+                <div><b>{project.name}</b><small>{project.contractor_name || project.municipality || 'لا توجد بيانات إضافية'}</small></div>
+                <span className="project-open">فتح ←</span>
+              </Link>
+            ))}
+            {!loading && projects.length === 0 && <div className="empty">لا توجد مشاريع مسجلة.</div>}
           </div>
         </div>
-        <div className="decision-card">
-          <span>قرار إصدار أمر عمل</span>
-          <strong>راجع تاريخ الموقع قبل اعتماد الاحتياج</strong>
-          <p>آخر أمر عمل، البنود السابقة، إجمالي الكميات، المنفذ والمتبقي تظهر لك في صفحة واحدة.</p>
-          <div className="decision-metric">
-            <small>إجمالي المتبقي المسجل</small>
-            <b>{formatNumber(totalRemaining)}</b>
+
+        <div className="dashboard-section alerts-panel">
+          <div className="dashboard-section-head">
+            <div><span className="section-kicker">مركز التنبيهات</span><h2>يحتاج إلى متابعة</h2></div>
+            <span className="alert-count">{alerts.length}</span>
+          </div>
+          <div className="dashboard-alert-list">
+            {alerts.map(({ order, timing }) => (
+              <Link href={`/work-order/${order.id}`} className={`dashboard-alert ${timing.tone}`} key={order.id}>
+                <span className="alert-dot" />
+                <div><b>أمر عمل رقم {order.work_order_number}</b><small>{order.projects?.name || order.title || 'بدون عنوان'}</small></div>
+                <strong>{timing.compactLabel}</strong>
+              </Link>
+            ))}
+            {!loading && alerts.length === 0 && <div className="dashboard-clear-state"><b>لا توجد تنبيهات عاجلة</b><span>لا توجد أوامر تبدأ أو تنتهي خلال 30 يومًا ضمن أحدث البيانات.</span></div>}
           </div>
         </div>
       </section>
 
-      <section className="stats-grid dashboard-stats">
-        <Link href="/projects" className="stat metric-link"><small>المشاريع</small><strong>{counts.projects}</strong><span>عرض جميع المشاريع</span></Link>
-        <Link href="/sites" className="stat metric-link"><small>المواقع</small><strong>{counts.sites}</strong><span>فتح دليل المواقع</span></Link>
-        <Link href="/work-orders" className="stat metric-link"><small>أوامر العمل</small><strong>{counts.workOrders}</strong><span>السجل التاريخي</span></Link>
-        <div className="stat"><small>قاموس البنود</small><strong>{counts.items}</strong><span>بند موحد قابل للبحث</span></div>
-      </section>
+      <section className="dashboard-two-column dashboard-bottom-grid">
+        <div className="dashboard-section">
+          <div className="dashboard-section-head"><div><span className="section-kicker">آخر النشاط</span><h2>أحدث أوامر العمل</h2></div><Link href="/work-orders" className="text-link">كل الأوامر</Link></div>
+          <div className="dashboard-activity-list">
+            {recentOrders.slice(0, 5).map((order) => {
+              const timing = getWorkOrderTiming(order.work_order_date, order.work_order_end_date);
+              return <Link href={`/work-order/${order.id}`} className="dashboard-activity-row" key={order.id}>
+                <div className="activity-number">{order.work_order_number}</div>
+                <div><b>{order.projects?.name || order.title || `أمر عمل ${order.work_order_number}`}</b><small>{formatDate(order.work_order_date)} · {timing.compactLabel}</small></div>
+              </Link>;
+            })}
+          </div>
+        </div>
 
-      <section className="dashboard-grid">
-        <div className="section-block search-hub">
-          <div className="section-title">
-            <div><span className="section-kicker">البحث العام</span><h2>ابحث بنوع البند</h2></div>
-            <span>يشمل كل المشاريع والمواقع</span>
-          </div>
-          <div className="search-row">
-            <input
-              className="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="مثال: شبكة ري، تربة زراعية، إنترلوك..."
-            />
-            {query && <button className="btn compact" onClick={() => setQuery('')}>مسح</button>}
-          </div>
-          <div className="result-cards">
-            {filteredItems.map((item) => (
-              <article className="item-result" key={item.item_id}>
-                <div className="item-result-head">
-                  <div><b>{item.item_name}</b><small>{item.category || 'بدون تصنيف'} · {item.unit || 'بدون وحدة'}</small></div>
-                  <span>{item.work_orders_count} أمر</span>
-                </div>
-                <div className="item-result-metrics">
-                  <span><small>مشاريع</small><b>{item.projects_count}</b></span>
-                  <span><small>مواقع</small><b>{item.sites_count}</b></span>
-                  <span><small>الكمية</small><b>{formatNumber(item.total_quantity)}</b></span>
-                  <span className="remaining"><small>المتبقي</small><b>{formatNumber(item.total_remaining_quantity)}</b></span>
-                </div>
-                <div className="item-period">من {formatDate(item.first_work_order_date)} إلى {formatDate(item.last_work_order_date)}</div>
+        <div className="dashboard-section">
+          <div className="dashboard-section-head"><div><span className="section-kicker">الاستيراد</span><h2>آخر ملفات البيانات</h2></div><Link href="/import" className="text-link">استيراد ملف</Link></div>
+          <div className="dashboard-activity-list">
+            {recentImports.slice(0, 5).map((batch) => (
+              <article className="dashboard-activity-row" key={batch.id}>
+                <div className="import-mini-status" data-status={batch.import_status}>XL</div>
+                <div><b>{batch.file_name}</b><small>{formatDate(batch.created_at)} · {batch.imported_rows_count || 0} صف · {batch.error_rows_count || 0} خطأ</small></div>
               </article>
             ))}
-            {!loading && filteredItems.length === 0 && <div className="empty">لا توجد نتائج مطابقة.</div>}
-          </div>
-        </div>
-
-        <aside className="section-block quick-panel">
-          <div className="section-title"><h2>وصول سريع</h2></div>
-          <Link className="quick-link" href="/import"><span>01</span><div><b>استيراد مشروع</b><small>رفع Excel ثم المراجعة قبل الاعتماد</small></div></Link>
-          <Link className="quick-link" href="/projects"><span>02</span><div><b>البحث داخل مشروع</b><small>المواقع والبنود وأوامر العمل</small></div></Link>
-          <Link className="quick-link" href="/sites"><span>03</span><div><b>قصة موقع</b><small>التسلسل الزمني والكميات السابقة</small></div></Link>
-          <Link className="quick-link" href="/work-orders"><span>04</span><div><b>سجل أوامر العمل</b><small>عرض الأوامر حسب التاريخ والمشروع</small></div></Link>
-        </aside>
-      </section>
-
-      <section className="section-block">
-        <div className="section-title">
-          <div><span className="section-kicker">المشاريع</span><h2>بوابة المشاريع</h2></div>
-          <Link href="/projects" className="text-link">عرض الكل</Link>
-        </div>
-        <div className="project-grid">
-          {projects.slice(0, 6).map((project) => (
-            <Link href={`/project/${project.id}`} className="project-card rich-project-card" key={project.id}>
-              <span className="badge">{project.status || 'active'}</span>
-              <h3>{project.name}</h3>
-              <p>{project.contractor_name || project.municipality || 'لم تضاف بيانات إضافية'}</p>
-              <span className="card-action">فتح المشروع ←</span>
-            </Link>
-          ))}
-          {!loading && projects.length === 0 && <div className="empty">لا توجد مشاريع في القاعدة حتى الآن.</div>}
-        </div>
-      </section>
-
-      <section className="split-grid">
-        <div className="section-block">
-          <div className="section-title"><div><span className="section-kicker">آخر تحديثات العمل</span><h2>أحدث أوامر العمل</h2></div><Link href="/work-orders" className="text-link">السجل الكامل</Link></div>
-          <div className="activity-list">
-            {recentOrders.map((order) => (
-              <article className="activity-row" key={order.id}>
-                <div className="activity-date"><b>{formatDate(order.work_order_date)}</b><small>{order.status || 'approved'}</small></div>
-                <div><strong>أمر عمل رقم {order.work_order_number}</strong><p>{order.title || order.projects?.name || 'بدون عنوان'}</p></div>
-              </article>
-            ))}
-            {!loading && recentOrders.length === 0 && <div className="empty">لا توجد أوامر عمل مستوردة بعد.</div>}
-          </div>
-        </div>
-
-        <div className="section-block">
-          <div className="section-title"><div><span className="section-kicker">النشاط</span><h2>آخر ملفات الاستيراد</h2></div><Link href="/import" className="text-link">استيراد جديد</Link></div>
-          <div className="activity-list">
-            {recentImports.map((batch) => (
-              <article className="activity-row" key={batch.id}>
-                <div className="import-status" data-status={batch.import_status}>{batch.import_status}</div>
-                <div><strong>{batch.file_name}</strong><p>{formatDate(batch.created_at)} · {batch.imported_rows_count || 0} صف مستورد · {batch.error_rows_count || 0} خطأ</p></div>
-              </article>
-            ))}
-            {!loading && recentImports.length === 0 && <div className="empty">لم يتم استيراد أي ملف حتى الآن.</div>}
+            {!loading && recentImports.length === 0 && <div className="empty">لا توجد عمليات استيراد مسجلة.</div>}
           </div>
         </div>
       </section>
 
-      <section className="section-block">
-        <div className="section-title"><div><span className="section-kicker">مؤشر الاستخدام</span><h2>أكثر المواقع ارتباطًا بأوامر العمل</h2></div><Link href="/sites" className="text-link">دليل المواقع</Link></div>
-        <div className="site-ranking">
-          {sites.map((site, index) => (
-            <Link href={`/site/${site.site_id}`} className="ranking-row" key={site.site_id}>
-              <span className="rank">{String(index + 1).padStart(2, '0')}</span>
-              <div className="ranking-name"><b>{site.site_name}</b><small>{site.project_name}</small></div>
-              <div><small>أوامر العمل</small><b>{site.work_orders_count}</b></div>
-              <div><small>البنود</small><b>{site.items_count}</b></div>
-              <div><small>المتبقي</small><b>{formatNumber(site.total_remaining_quantity)}</b></div>
-              <div><small>آخر أمر</small><b>{formatDate(site.last_work_order_date)}</b></div>
-            </Link>
-          ))}
-          {!loading && sites.length === 0 && <div className="empty">ستظهر المواقع هنا بعد استيراد بيانات بريمان.</div>}
-        </div>
+      <section className="dashboard-decision-strip">
+        <div><span>الرصيد المتبقي المسجل</span><strong>{formatNumber(totalRemaining)}</strong></div>
+        <p>استخدم البحث الشامل وقصة الموقع قبل اعتماد أي احتياج أو إصدار أمر عمل جديد.</p>
+        <Link href="/search" className="btn">فتح البحث الشامل</Link>
       </section>
     </main>
   );
