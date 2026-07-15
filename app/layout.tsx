@@ -1,33 +1,7 @@
-import './globals.css';
-import Link from 'next/link';
-
-export const metadata = {
-  title: 'مرجع أوامر العمل',
-  description: 'قاعدة معرفة لأوامر العمل والمواقع والكميات',
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="ar" dir="rtl">
-      <body>
-        <header className="topbar">
-          <Link href="/" className="brand">
-            <span className="brand-mark">WO</span>
-            <div>
-              <strong>مرجع أوامر العمل</strong>
-              <small>Project Knowledge Base</small>
-            </div>
-          </Link>
-          <nav className="nav">
-            <Link href="/">مركز المعرفة</Link>
-            <Link href="/projects">المشاريع</Link>
-            <Link href="/sites">المواقع</Link>
-            <Link href="/work-orders">أوامر العمل</Link>
-            <Link href="/import">استيراد Excel</Link>
-          </nav>
-        </header>
-        {children}
-      </body>
-    </html>
-  );
+import type { Metadata } from "next";
+import "./globals.css";
+import AppShell from "./components/AppShell";
+export const metadata: Metadata = { title: "مرجع أوامر العمل", description: "قاعدة المعرفة التشغيلية للمشاريع" };
+export default function RootLayout({children}:{children:React.ReactNode}) {
+  return <html lang="ar" dir="rtl"><body><AppShell>{children}</AppShell></body></html>;
 }
