@@ -528,3 +528,57 @@ body{margin:0;background:var(--shell-bg)}
 @media(max-width:1200px){.projects-summary-grid{grid-template-columns:repeat(3,1fr)}.projects-toolbar{grid-template-columns:1fr 1fr 1fr}.projects-search-field{grid-column:1/-1}.projects-management-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:760px){.projects-hero{padding:23px;align-items:flex-start;flex-direction:column}.projects-summary-grid{grid-template-columns:1fr 1fr}.projects-toolbar{grid-template-columns:1fr}.projects-search-field{grid-column:auto}.projects-view-switch{width:max-content}.projects-management-grid{grid-template-columns:1fr}.project-card-copy{min-height:0}}
 @media(max-width:430px){.projects-summary-grid{grid-template-columns:1fr}.project-card-actions{grid-template-columns:1fr}}
+
+/* === PROJECT TABLE NAME CLAMP V21 === */
+.projects-management-table tbody tr {
+  height: 82px;
+}
+
+.projects-management-table .project-table-name-cell {
+  width: 46%;
+  max-width: 640px;
+  min-width: 360px;
+  vertical-align: middle;
+}
+
+.project-table-name-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.project-table-name-link b {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-height: 3.25em;
+  line-height: 1.6;
+  font-size: 14px;
+  text-overflow: ellipsis;
+}
+
+.project-table-name-link:hover b {
+  color: var(--green-2, #1f6b57);
+}
+
+.projects-management-table .project-table-name-cell small {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (min-width: 1500px) {
+  .project-table-name-link b {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    max-height: 4.8em;
+  }
+
+  .projects-management-table tbody tr {
+    height: 96px;
+  }
+}

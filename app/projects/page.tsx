@@ -233,7 +233,14 @@ export default function ProjectsPage() {
           <table className="projects-management-table">
             <thead><tr><th>المشروع</th><th>الحالة</th><th>المواقع</th><th>الأوامر</th><th>الجارية</th><th>القادمة</th><th>البنود</th><th></th></tr></thead>
             <tbody>{filtered.map((project) => <tr key={project.id}>
-              <td><b>{compactName(project.name)}</b><small>{project.contractor_name || project.municipality || '—'}</small></td>
+              <td className="project-table-name-cell">
+                <Link href={`/project/${project.id}`} className="project-table-name-link" title={project.name}>
+                  <b>{project.name}</b>
+                </Link>
+                <small title={[project.municipality, project.contractor_name].filter(Boolean).join(' · ')}>
+                  {[project.municipality, project.contractor_name].filter(Boolean).join(' · ') || '—'}
+                </small>
+              </td>
               <td><span className={`project-status-chip status-${statusLabel(project.status)}`}>{statusLabel(project.status)}</span></td>
               <td>{project.sitesCount}</td><td>{project.ordersCount}</td><td>{project.activeOrders}</td><td>{project.upcomingOrders}</td><td>{project.itemsCount}</td>
               <td><Link href={`/project/${project.id}`} className="text-link">فتح ←</Link></td>
