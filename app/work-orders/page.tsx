@@ -186,7 +186,8 @@ export default function OrdersPage() {
         </div>
         <div className="actions">
           <button className="btn" onClick={load} disabled={loading}>{loading ? 'جاري التحديث...' : 'تحديث البيانات'}</button>
-          <Link href="/import" className="btn primary">استيراد أمر عمل</Link>
+          <Link href="/import" className="btn">استيراد أمر عمل</Link>
+          <Link href="/work-orders/new" className="btn primary">+ إنشاء أمر عمل</Link>
         </div>
       </section>
 
