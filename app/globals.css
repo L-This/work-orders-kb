@@ -1445,3 +1445,19 @@ body{margin:0;background:var(--shell-bg)}
 .danger-text{color:#b44c36!important}.danger-button{background:#a83f2c!important;color:white!important;border-color:#a83f2c!important}
 .project-stats-modal .project-editor-actions,.project-delete-modal .project-editor-actions{padding:0 22px 22px}
 @media(max-width:700px){.project-stats-grid,.project-delete-counts{grid-template-columns:1fr 1fr}.project-editor-tabs{grid-template-columns:1fr}.project-card-actions-four{grid-template-columns:1fr 1fr}}
+
+/* Projects management — phase one refinements */
+.project-editor-tabs{gap:10px;padding:7px;border-radius:19px}
+.project-editor-tabs button{min-height:58px;padding:16px 22px;border-radius:14px;font-size:17px;transition:background .2s ease,color .2s ease,transform .2s ease,box-shadow .2s ease}
+.project-editor-tabs button:hover{transform:translateY(-1px);color:var(--green)}
+.project-editor-tabs button.active{box-shadow:0 8px 24px rgba(19,72,57,.13)}
+.project-editor-tab-panel{display:grid;grid-template-columns:1fr 1fr;gap:16px;animation:projectTabIn .28s ease both}
+.project-editor-tab-panel>label.wide{grid-column:1/-1}
+@keyframes projectTabIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.project-action-menu a,.project-action-menu button{display:flex;align-items:center;gap:10px;text-align:right}
+.project-menu-icon{width:18px;height:18px;flex:0 0 18px;color:#38695d}
+.project-action-menu .danger .project-menu-icon{color:#b43c31}
+.project-action-separator{height:1px;margin:5px 8px;background:linear-gradient(90deg,transparent,#eadcc1,transparent)}
+.project-card-detail-line{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed #e9dcc4;color:#6d746f;font-size:11px}
+.project-card-detail-line b{color:#2d5f53;font-weight:900}
+@media(max-width:700px){.project-editor-tab-panel{grid-template-columns:1fr}.project-editor-tabs button{min-height:52px;font-size:15px}.project-card-detail-line{align-items:flex-start;flex-direction:column}}
