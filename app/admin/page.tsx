@@ -173,6 +173,7 @@ async function saveAndSync(workProjectId: string) {
                 </button>
               </div>
             </article>;
+            );
           })}
         </div>
       )}
