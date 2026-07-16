@@ -19,7 +19,10 @@ console.log('LINK DATA:', test.data);
     const [workProjects, irrigationProjects, links] = await Promise.all([
       work.from('projects').select('id,name,contractor_name').order('name'),
       irrigation.from('projects').select('id,name').order('name'),
-      work.from('project_irrigation_links').select('work_orders_project_id,irrigation_project_id,irrigation_project_name,last_synced_at'),
+      Promise.resolve({
+  data: test.data,
+  error: test.error,
+}),
     ]);
 
     const error = workProjects.error || irrigationProjects.error || links.error;
