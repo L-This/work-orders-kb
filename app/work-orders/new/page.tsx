@@ -42,6 +42,24 @@ const toNumber = (value: number | string | null | undefined) => Number(value) ||
 const formatQuantity = (value: number) => value.toLocaleString('en-US', { maximumFractionDigits: 3 });
 const formatMoney = (value: number) => value.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
+function compactText(value: string | null | undefined, maxLength = 72) {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxLength) return clean;
+  return `${clean.slice(0, Math.max(1, maxLength - 1)).trim()}…`;
+}
+
+function compactProjectName(value: string) {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  const firstUsefulPart = clean.split(/\s[-–—:]\s/)[0]?.trim() || clean;
+  return compactText(firstUsefulPart.length >= 24 ? firstUsefulPart : clean, 78);
+}
+
+function compactItemName(value: string) {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  const firstSentence = clean.split(/[؛\n]/)[0]?.trim() || clean;
+  return compactText(firstSentence, 66);
+}
+
 function addDays(dateValue: string, duration: number) {
   if (!dateValue || duration <= 0) return '';
   const date = new Date(`${dateValue}T12:00:00`);
@@ -72,6 +90,7 @@ export default function NewWorkOrderPage() {
   const [boqItems, setBoqItems] = useState<BoqItem[]>([]);
   const [itemBalances, setItemBalances] = useState<Map<string, ItemBalance>>(new Map());
   const [orderNumber, setOrderNumber] = useState('01');
+  const [lastOrderNumber, setLastOrderNumber] = useState('لا يوجد');
   const [durationDays, setDurationDays] = useState('30');
   const [startDate, setStartDate] = useState('');
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
@@ -125,6 +144,7 @@ export default function NewWorkOrderPage() {
       setSelectedSiteIds([]);
       setContractId(null);
       setOrderNumber('01');
+      setLastOrderNumber('لا يوجد');
       setItemBalances(new Map());
       setItemToAdd('');
       setDraftQuantity('');
@@ -172,7 +192,16 @@ export default function NewWorkOrderPage() {
     const existingOrders = (ordersResult.data || []) as ExistingOrder[];
     setSites((sitesResult.data || []) as Site[]);
     setBoqItems((boqResult.data || []) as unknown as BoqItem[]);
-    setOrderNumber(nextOrderNumber(existingOrders.map((order) => order.work_order_number)));
+    const existingNumbers = existingOrders.map((order) => order.work_order_number);
+    const generatedNumber = nextOrderNumber(existingNumbers);
+    const generatedNumeric = Number(generatedNumber) || 1;
+    setOrderNumber(generatedNumber);
+    setLastOrderNumber(existingOrders.length
+      ? String(Math.max(...existingNumbers.map((value) => {
+          const matches = String(value || '').match(/\d+/g);
+          return Number(matches?.[matches.length - 1]) || 0;
+        }))).padStart(generatedNumber.length, '0')
+      : 'لا يوجد');
     setContractId(((contractsResult.data || [])[0] as Contract | undefined)?.id || null);
 
     if (existingOrders.length) {
@@ -385,22 +414,52 @@ export default function NewWorkOrderPage() {
             <span>المشروع</span>
             <select value={projectId} onChange={(event) => setProjectId(event.target.value)} disabled={loading}>
               <option value="">اختر المشروع...</option>
-              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {compactProjectName(project.name)}
+                </option>
+              ))}
             </select>
           </label>
           <div className="next-order-number-card" aria-label="رقم أمر العمل التالي">
             <small>سيتم إنشاء</small>
             <span>أمر العمل رقم</span>
             <strong>{orderNumber}</strong>
-            <em>محسوب تلقائيًا من آخر أمر داخل المشروع</em>
+            <div className="order-number-comparison">
+              <span>آخر أمر مسجل</span>
+              <b>{lastOrderNumber}</b>
+            </div>
+            <em>يُحسب تلقائيًا داخل المشروع المختار</em>
           </div>
         </div>
+
+        {selectedProject ? (
+          <div className="selected-project-summary">
+            <div>
+              <small>المشروع المختار</small>
+              <strong>{selectedProject.name}</strong>
+            </div>
+            <div>
+              <small>المقاول</small>
+              <span>{selectedProject.contractor_name || 'غير مسجل'}</span>
+            </div>
+            <div>
+              <small>المتاح بعد الاختيار</small>
+              <span>{sites.length} موقع • {boqItems.length} بند عقد</span>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="create-order-step section-block">
         <div className="section-title">
           <div><span className="section-kicker">الخطوة 02</span><h2>نطاق المواقع</h2></div>
-          <strong className="selected-count-badge">{selectedSiteIds.length} موقع محدد</strong>
+          <div className="site-selection-summary">
+            <strong className="selected-count-badge">{selectedSiteIds.length} موقع محدد</strong>
+            {selectedSiteIds.length ? (
+              <span>{sites.filter((site) => selectedSiteIds.includes(site.id)).slice(0, 3).map((site) => site.name).join(' • ')}{selectedSiteIds.length > 3 ? ` • +${selectedSiteIds.length - 3}` : ''}</span>
+            ) : null}
+          </div>
         </div>
         {!projectId ? <div className="empty compact">اختر المشروع أولًا لعرض المواقع.</div> : projectLoading ? <div className="empty compact">جاري تحميل مواقع المشروع...</div> : (
           <div className="site-picker-panel">
@@ -443,7 +502,9 @@ export default function NewWorkOrderPage() {
             <select value={itemToAdd} onChange={(event) => { setItemToAdd(event.target.value); setDraftQuantity(''); }} disabled={!projectId || projectLoading}>
               <option value="">اختر بندًا من جدول كميات المشروع...</option>
               {boqItems.filter((boq) => !selectedItems.some((selected) => selected.boqId === boq.id)).map((boq) => (
-                <option key={boq.id} value={boq.id}>{boq.boq_item_no ? `${boq.boq_item_no} — ` : ''}{boq.items?.name || 'بند غير مسمى'}</option>
+                <option key={boq.id} value={boq.id}>
+                  {boq.boq_item_no ? `${boq.boq_item_no} — ` : ''}{compactItemName(boq.items?.name || 'بند غير مسمى')}
+                </option>
               ))}
             </select>
           </label>
@@ -451,10 +512,16 @@ export default function NewWorkOrderPage() {
           {draftBoq && draftBalance ? (
             <div className="item-balance-preview">
               <div className="item-preview-heading">
-                <div><small>{draftBoq.boq_item_no ? `البند ${draftBoq.boq_item_no}` : 'البند المختار'}</small><h3>{draftBoq.items?.name || 'بند غير مسمى'}</h3></div>
-                <span>{draftBalance.unit || 'بدون وحدة'}</span>
+                <div>
+                  <small>{draftBoq.boq_item_no ? `رقم البند ${draftBoq.boq_item_no}` : 'البند المختار'}</small>
+                  <h3>{draftBoq.items?.name || 'بند غير مسمى'}</h3>
+                </div>
+                <div className="item-preview-meta">
+                  <span>{draftBalance.unit || 'بدون وحدة'}</span>
+                  <span>سعر الوحدة: {formatMoney(toNumber(draftBoq.unit_price))}</span>
+                </div>
               </div>
-              <div className="item-balance-grid">
+              <div className="item-balance-grid five">
                 <div><small>كمية العقد</small><strong>{formatQuantity(draftBalance.contractQuantity)}</strong></div>
                 <div><small>المنفذ فعليًا</small><strong>{formatQuantity(draftBalance.executed)}</strong></div>
                 <div><small>محجوز لأوامر أخرى</small><strong>{formatQuantity(draftBalance.reserved)}</strong></div>
