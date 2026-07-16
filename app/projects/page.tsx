@@ -91,6 +91,9 @@ export default function ProjectsPage() {
   const [actionProjectId, setActionProjectId] = useState('');
   const [menuProjectId, setMenuProjectId] = useState('');
   const [createdProject, setCreatedProject] = useState<Project | null>(null);
+  const [editorTab, setEditorTab] = useState<'basic' | 'contract'>('basic');
+  const [statsProject, setStatsProject] = useState<ProjectSummary | null>(null);
+  const [deleteProject, setDeleteProject] = useState<ProjectSummary | null>(null);
 
   useEffect(() => { void loadProjects(); }, []);
 
@@ -120,6 +123,7 @@ export default function ProjectsPage() {
   function openCreateProject() {
     setEditingProject(null);
     setForm(emptyProjectForm);
+    setEditorTab('basic');
     setEditorOpen(true);
     setMessage('');
   }
@@ -140,6 +144,7 @@ export default function ProjectsPage() {
       owner_entity: project.owner_entity || '',
       supervisor_name: project.supervisor_name || '',
     });
+    setEditorTab('basic');
     setEditorOpen(true);
     setMenuProjectId('');
     setMessage('');
@@ -200,7 +205,6 @@ export default function ProjectsPage() {
   }
 
   async function trashProject(project: ProjectSummary) {
-    if (!window.confirm(`نقل المشروع «${project.name}» إلى سلة المحذوفات؟ لا يمكن تنفيذ ذلك إذا كان مرتبطًا بمواقع أو بنود أو أوامر عمل.`)) return;
     setActionProjectId(project.id);
     setMessage('');
     try {
@@ -208,6 +212,7 @@ export default function ProjectsPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'تعذر حذف المشروع.');
       setMessage('تم نقل المشروع إلى سلة المحذوفات.');
+      setDeleteProject(null);
       await loadProjects();
     } catch (actionError) {
       setMessage(actionError instanceof Error ? actionError.message : 'تعذر حذف المشروع.');
@@ -216,6 +221,17 @@ export default function ProjectsPage() {
       setMenuProjectId('');
     }
   }
+
+  function contractProgress(project: ProjectSummary) {
+    if (!project.contract_start_date || !project.contract_end_date) return null;
+    const start = new Date(`${project.contract_start_date}T00:00:00`).getTime();
+    const end = new Date(`${project.contract_end_date}T23:59:59`).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+    const now = Date.now();
+    const percent = Math.max(0, Math.min(100, Math.round(((now - start) / (end - start)) * 100)));
+    return { percent, daysTotal: Math.max(1, Math.ceil((end - start) / 86400000)), daysRemaining: Math.max(0, Math.ceil((end - now) / 86400000)) };
+  }
+
 
   const summaries = useMemo<ProjectSummary[]>(() => projects.map((project) => {
     const projectOrders = orders.filter((order) => order.project_id === project.id);
@@ -335,11 +351,14 @@ export default function ProjectsPage() {
                   <span className={`project-status-chip status-${statusLabel(project.status)}`}>{statusLabel(project.status)}</span>
                   <button type="button" className="project-more-button" aria-label="إجراءات المشروع" onClick={() => setMenuProjectId((current) => current === project.id ? '' : project.id)}>⋮</button>
                   {menuProjectId === project.id ? <div className="project-action-menu">
-                    <button type="button" onClick={() => openEditProject(project)}>تعديل البيانات</button>
-                    <Link href={`/project/${project.id}`}>إدارة المواقع والبنود</Link>
-                    <Link href={`/work-orders?project=${project.id}`}>إدارة أوامر العمل</Link>
-                    <button type="button" onClick={() => void archiveProject(project)} disabled={actionProjectId === project.id}>{project.status === 'archived' ? 'إعادة التنشيط' : 'أرشفة المشروع'}</button>
-                    <button type="button" className="danger" onClick={() => void trashProject(project)} disabled={actionProjectId === project.id}>حذف إلى السلة</button>
+                    <button type="button" onClick={() => openEditProject(project)}>✏️ تعديل المشروع</button>
+                    <Link href={`/sites?project=${project.id}`}>📍 إدارة المواقع</Link>
+                    <Link href={`/items?project=${project.id}`}>📦 إدارة البنود</Link>
+                    <Link href={`/work-orders?project=${project.id}`}>📋 أوامر العمل</Link>
+                    <button type="button" onClick={() => { openEditProject(project); setEditorTab('contract'); }}>📄 بيانات العقد</button>
+                    <button type="button" onClick={() => { setStatsProject(project); setMenuProjectId(''); }}>📊 إحصائيات المشروع</button>
+                    <button type="button" onClick={() => void archiveProject(project)} disabled={actionProjectId === project.id}>{project.status === 'archived' ? '♻️ إعادة التنشيط' : '🗄️ أرشفة المشروع'}</button>
+                    <button type="button" className="danger" onClick={() => { setDeleteProject(project); setMenuProjectId(''); }} disabled={actionProjectId === project.id}>🗑️ حذف المشروع</button>
                   </div> : null}
                 </div>
               </div>
@@ -353,6 +372,11 @@ export default function ProjectsPage() {
                   {project.contract_end_date ? <span>إلى {project.contract_end_date}</span> : null}
                 </div> : null}
               </div>
+              {contractProgress(project) ? <div className="project-contract-progress">
+                <div><span>تقدم مدة العقد</span><b>{contractProgress(project)?.percent}%</b></div>
+                <div className="project-contract-progress-track"><i style={{ width: `${contractProgress(project)?.percent}%` }} /></div>
+                <small>{contractProgress(project)?.daysRemaining} يوم متبقٍ من أصل {contractProgress(project)?.daysTotal} يوم</small>
+              </div> : null}
               <div className="project-card-metrics">
                 <div><small>المواقع</small><strong>{project.sitesCount}</strong></div>
                 <div><small>أوامر العمل</small><strong>{project.ordersCount}</strong></div>
@@ -364,9 +388,11 @@ export default function ProjectsPage() {
                 <span><i className="timing-dot ending" /> تنتهي قريبًا <b>{project.endingSoonOrders}</b></span>
                 <span><i className="timing-dot ended" /> منتهية <b>{project.endedOrders}</b></span>
               </div>
-              <div className="project-card-actions">
+              <div className="project-card-actions project-card-actions-four">
                 <Link href={`/project/${project.id}`} className="btn primary">فتح المشروع</Link>
                 <Link href={`/work-orders?project=${project.id}`} className="btn">أوامر العمل</Link>
+                <Link href={`/sites?project=${project.id}`} className="btn">المواقع</Link>
+                <Link href={`/items?project=${project.id}`} className="btn">البنود</Link>
               </div>
             </article>
           ))}
@@ -420,24 +446,62 @@ export default function ProjectsPage() {
                 <Link href={`/project/${createdProject.id}`} className="btn primary">فتح المشروع وإضافة البيانات</Link>
                 <Link href={`/sites?project=${createdProject.id}`} className="btn">إدارة المواقع</Link>
                 <Link href={`/items?project=${createdProject.id}`} className="btn">إدارة البنود</Link>
+                <Link href={`/work-orders/new?project=${createdProject.id}`} className="btn">إنشاء أمر عمل</Link>
                 <button type="button" className="btn" onClick={() => { setCreatedProject(null); setForm(emptyProjectForm); }}>إنشاء مشروع آخر</button>
               </div>
             </div> : <>
+            <div className="project-editor-tabs wide">
+              <button type="button" className={editorTab === 'basic' ? 'active' : ''} onClick={() => setEditorTab('basic')}>البيانات الأساسية</button>
+              <button type="button" className={editorTab === 'contract' ? 'active' : ''} onClick={() => setEditorTab('contract')}>بيانات العقد</button>
+            </div>
+            {editorTab === 'basic' ? <>
             <label className="wide"><span>اسم المشروع *</span><input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required autoFocus /></label>
             <label><span>رمز المشروع</span><input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} placeholder="مثال: PRJ-07" /></label>
             <label><span>الحالة</span><select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="active">نشط</option><option value="paused">متوقف</option><option value="completed">منتهي</option><option value="archived">مؤرشف</option></select></label>
             <label><span>البلدية</span><input value={form.municipality} onChange={(event) => setForm((current) => ({ ...current, municipality: event.target.value }))} /></label>
             <label><span>المقاول</span><input value={form.contractor_name} onChange={(event) => setForm((current) => ({ ...current, contractor_name: event.target.value }))} /></label>
+            <label className="wide"><span>الوصف</span><textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={4} /></label>
+            </> : <>
             <label><span>رقم العقد</span><input value={form.contract_number} onChange={(event) => setForm((current) => ({ ...current, contract_number: event.target.value }))} placeholder="مثال: 2026/17" /></label>
             <label><span>الجهة المالكة</span><input value={form.owner_entity} onChange={(event) => setForm((current) => ({ ...current, owner_entity: event.target.value }))} placeholder="مثال: أمانة محافظة جدة" /></label>
             <label><span>تاريخ بداية العقد</span><input type="date" value={form.contract_start_date} onChange={(event) => setForm((current) => ({ ...current, contract_start_date: event.target.value }))} /></label>
             <label><span>تاريخ نهاية العقد</span><input type="date" value={form.contract_end_date} onChange={(event) => setForm((current) => ({ ...current, contract_end_date: event.target.value }))} /></label>
             <label><span>قيمة العقد</span><input type="number" min="0" step="0.01" value={form.contract_value} onChange={(event) => setForm((current) => ({ ...current, contract_value: event.target.value }))} placeholder="0.00" /></label>
             <label><span>المشرف المسؤول</span><input value={form.supervisor_name} onChange={(event) => setForm((current) => ({ ...current, supervisor_name: event.target.value }))} /></label>
-            <label className="wide"><span>الوصف</span><textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={4} /></label>
-            <div className="project-editor-actions"><button type="button" className="btn" onClick={() => setEditorOpen(false)} disabled={saving}>إلغاء</button><button type="submit" className="btn primary" disabled={saving}>{saving ? 'جاري الحفظ...' : editingProject ? 'حفظ التعديلات' : 'إنشاء المشروع'}</button></div>
+            </>}
+            <div className="project-editor-actions wide"><button type="button" className="btn" onClick={() => setEditorOpen(false)} disabled={saving}>إلغاء</button><button type="submit" className="btn primary" disabled={saving}>{saving ? 'جاري الحفظ...' : editingProject ? 'حفظ التعديلات' : 'إنشاء المشروع'}</button></div>
             </>}
           </form>
+        </section>
+      </div> : null}
+
+      {statsProject ? <div className="project-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setStatsProject(null); }}>
+        <section className="project-stats-modal" role="dialog" aria-modal="true" aria-label="إحصائيات المشروع">
+          <div className="project-editor-head"><div><span className="eyebrow">ملخص تنفيذي</span><h2>إحصائيات المشروع</h2><p>{statsProject.name}</p></div><button type="button" onClick={() => setStatsProject(null)}>×</button></div>
+          <div className="project-stats-grid">
+            <article><small>قيمة العقد</small><strong>{statsProject.contract_value == null ? 'غير مسجلة' : new Intl.NumberFormat('ar-SA').format(statsProject.contract_value)}</strong></article>
+            <article><small>المواقع</small><strong>{statsProject.sitesCount}</strong></article>
+            <article><small>أوامر العمل</small><strong>{statsProject.ordersCount}</strong></article>
+            <article><small>بنود العقد</small><strong>{statsProject.itemsCount}</strong></article>
+            <article><small>الأوامر الجارية</small><strong>{statsProject.activeOrders}</strong></article>
+            <article><small>الأوامر القادمة</small><strong>{statsProject.upcomingOrders}</strong></article>
+          </div>
+          {contractProgress(statsProject) ? <div className="project-stats-progress"><div><span>تقدم مدة العقد</span><b>{contractProgress(statsProject)?.percent}%</b></div><div className="project-contract-progress-track"><i style={{ width: `${contractProgress(statsProject)?.percent}%` }} /></div><p>{contractProgress(statsProject)?.daysRemaining} يوم متبقٍ من مدة العقد.</p></div> : <div className="notice">أضف تاريخي بداية ونهاية العقد لإظهار التقدم الزمني.</div>}
+          <div className="project-stats-note">مؤشرات المنفذ والمحجوز والمتبقي ستظهر هنا تلقائيًا بعد تفعيل مرحلة تسجيل التنفيذ الميداني.</div>
+          <div className="project-editor-actions"><button type="button" className="btn" onClick={() => setStatsProject(null)}>إغلاق</button><Link className="btn primary" href={`/project/${statsProject.id}`}>فتح المشروع</Link></div>
+        </section>
+      </div> : null}
+
+      {deleteProject ? <div className="project-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !actionProjectId) setDeleteProject(null); }}>
+        <section className="project-delete-modal" role="dialog" aria-modal="true" aria-label="حذف المشروع">
+          <div className="project-editor-head"><div><span className="eyebrow danger-text">إجراء حساس</span><h2>حذف المشروع</h2><p>{deleteProject.name}</p></div><button type="button" onClick={() => setDeleteProject(null)} disabled={!!actionProjectId}>×</button></div>
+          <div className="project-delete-counts"><article><strong>{deleteProject.sitesCount}</strong><span>موقع</span></article><article><strong>{deleteProject.ordersCount}</strong><span>أمر عمل</span></article><article><strong>{deleteProject.itemsCount}</strong><span>بند عقد</span></article></div>
+          {(deleteProject.sitesCount + deleteProject.ordersCount + deleteProject.itemsCount) > 0 ? <div className="project-delete-warning"><b>الحذف غير متاح حاليًا</b><p>المشروع مرتبط ببيانات تشغيلية. استخدم الأرشفة للحفاظ على السجل ومنع ظهوره ضمن المشاريع النشطة.</p></div> : <div className="project-delete-warning safe"><b>يمكن نقل المشروع إلى سلة المحذوفات</b><p>لا توجد مواقع أو بنود أو أوامر عمل مرتبطة به.</p></div>}
+          <div className="project-editor-actions">
+            <button type="button" className="btn" onClick={() => setDeleteProject(null)} disabled={!!actionProjectId}>إلغاء</button>
+            <button type="button" className="btn" onClick={() => { void archiveProject(deleteProject); setDeleteProject(null); }} disabled={!!actionProjectId}>{deleteProject.status === 'archived' ? 'إعادة التنشيط' : 'أرشفة المشروع'}</button>
+            <button type="button" className="btn danger-button" onClick={() => void trashProject(deleteProject)} disabled={!!actionProjectId || (deleteProject.sitesCount + deleteProject.ordersCount + deleteProject.itemsCount) > 0}>{actionProjectId ? 'جاري التنفيذ...' : 'نقل إلى السلة'}</button>
+          </div>
         </section>
       </div> : null}
     </main>
