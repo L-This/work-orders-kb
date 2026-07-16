@@ -146,10 +146,13 @@ async function saveAndSync(workProjectId: string) {
           {workProjects.map((project) => {
   const linked = linkMap.get(project.id);
 
-  console.log({
-    projectId: project.id,
-    linked,
-  });
+  console.log(
+  'PROJECT LINK CHECK:',
+  project.id,
+  project.name,
+  linked?.work_orders_project_id ?? 'NO LINK',
+  linked?.irrigation_project_name ?? 'NO IRRIGATION PROJECT',
+);
 
   return ( <article className="integration-project-row" key={project.id}>
               <div className="integration-work-project">
