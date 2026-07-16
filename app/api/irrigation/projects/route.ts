@@ -6,10 +6,14 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const work = createWorkOrdersAdminClient();
-      console.log(
-  'SUPABASE URL:',
-  process.env.NEXT_PUBLIC_SUPABASE_URL
-);
+      const test = await work
+  .from('project_irrigation_links')
+  .select('*');
+
+console.log('LINK ERROR:', test.error);
+console.log('LINK COUNT:', test.data?.length);
+console.log('LINK DATA:', test.data);
+    
     const irrigation = createIrrigationAdminClient();
 
     const [workProjects, irrigationProjects, links] = await Promise.all([
