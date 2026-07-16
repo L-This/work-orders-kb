@@ -34,27 +34,98 @@ export default function Page() {
 
   const linkMap = useMemo(() => new Map(links.map((link) => [link.work_orders_project_id, link])), [links]);
 
-  async function saveAndSync(workProjectId: string) {
-    const irrigationProjectId = selections[workProjectId];
-    if (!irrigationProjectId) { setMessage('اختر مشروع الري المقابل أولًا.'); return; }
-    setBusyId(workProjectId); setMessage('');
+async function saveAndSync(workProjectId: string) {
+  const irrigationProjectId = selections[workProjectId];
+
+  if (!irrigationProjectId) {
+    setMessage('اختر مشروع الري المقابل أولًا.');
+    return;
+  }
+
+  setBusyId(workProjectId);
+  setMessage('');
+
+  try {
     const linkResponse = await fetch('/api/irrigation/link', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workProjectId, irrigationProjectId }),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        workProjectId,
+        irrigationProjectId,
+      }),
     });
-    const linkData = await linkResponse.json();
-    if (!linkResponse.ok) { setMessage(linkData.error || 'تعذر حفظ الربط.'); setBusyId(''); return; }
+
+    const linkText = await linkResponse.text();
+
+    let linkData: {
+      error?: string;
+    } = {};
+
+    try {
+      linkData = linkText ? JSON.parse(linkText) : {};
+    } catch {
+      throw new Error(
+        `مسار حفظ الربط أعاد استجابة غير صحيحة (${linkResponse.status}).`,
+      );
+    }
+
+    if (!linkResponse.ok) {
+      throw new Error(
+        linkData.error || `تعذر حفظ الربط (${linkResponse.status}).`,
+      );
+    }
 
     const syncResponse = await fetch('/api/irrigation/sync', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workProjectId }),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        workProjectId,
+      }),
     });
-    const syncData = await syncResponse.json();
-    if (!syncResponse.ok) setMessage(syncData.error || 'تم حفظ الربط لكن تعذرت المزامنة.');
-    else setMessage(`تم الربط ومزامنة ${syncData.synced} موقع بنجاح.`);
+
+    const syncText = await syncResponse.text();
+
+    let syncData: {
+      error?: string;
+      synced?: number;
+    } = {};
+
+    try {
+      syncData = syncText ? JSON.parse(syncText) : {};
+    } catch {
+      throw new Error(
+        `مسار المزامنة أعاد استجابة غير صحيحة (${syncResponse.status}).`,
+      );
+    }
+
+    if (!syncResponse.ok) {
+      throw new Error(
+        syncData.error ||
+          `تم حفظ الربط، لكن تعذرت مزامنة المواقع (${syncResponse.status}).`,
+      );
+    }
+
     await load();
+
+    setMessage(
+      `تم الربط ومزامنة ${syncData.synced ?? 0} موقع بنجاح.`,
+    );
+  } catch (error) {
+    console.error('Irrigation link/sync error:', error);
+
+    setMessage(
+      error instanceof Error
+        ? error.message
+        : 'حدث خطأ غير متوقع أثناء الربط والمزامنة.',
+    );
+  } finally {
     setBusyId('');
   }
+}
 
   return <div className="module-page irrigation-link-page">
     <div className="module-heading">
