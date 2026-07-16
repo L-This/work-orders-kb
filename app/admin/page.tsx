@@ -172,7 +172,7 @@ async function saveAndSync(workProjectId: string) {
                   {busyId === project.id ? 'جاري المزامنة...' : linked ? 'حفظ ومزامنة' : 'ربط ومزامنة'}
                 </button>
               </div>
-            </article>;
+            </article>
             );
           })}
         </div>
