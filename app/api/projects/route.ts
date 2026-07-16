@@ -13,7 +13,7 @@ export async function GET() {
     const work = createWorkOrdersAdminClient();
     const result = await work
       .from('projects')
-      .select('id,name,code,municipality,contractor_name,status,description,created_at,updated_at,deleted_at')
+      .select('id,name,code,municipality,contractor_name,status,description,contract_number,contract_start_date,contract_end_date,contract_value,owner_entity,supervisor_name,created_at,updated_at,deleted_at')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
@@ -43,8 +43,14 @@ export async function POST(request: NextRequest) {
       contractor_name: clean(body.contractor_name),
       status: clean(body.status) || 'active',
       description: clean(body.description),
+      contract_number: clean(body.contract_number),
+      contract_start_date: clean(body.contract_start_date),
+      contract_end_date: clean(body.contract_end_date),
+      contract_value: body.contract_value === '' || body.contract_value == null ? null : Number(body.contract_value),
+      owner_entity: clean(body.owner_entity),
+      supervisor_name: clean(body.supervisor_name),
       updated_at: new Date().toISOString(),
-    }).select('id,name,code,municipality,contractor_name,status,description,created_at,updated_at,deleted_at').single();
+    }).select('id,name,code,municipality,contractor_name,status,description,contract_number,contract_start_date,contract_end_date,contract_value,owner_entity,supervisor_name,created_at,updated_at,deleted_at').single();
 
     if (result.error) throw result.error;
     return NextResponse.json({ project: result.data }, { status: 201 });

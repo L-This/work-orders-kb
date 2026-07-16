@@ -29,9 +29,15 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     if (body.contractor_name !== undefined) payload.contractor_name = clean(body.contractor_name);
     if (body.status !== undefined) payload.status = clean(body.status) || 'active';
     if (body.description !== undefined) payload.description = clean(body.description);
+    if (body.contract_number !== undefined) payload.contract_number = clean(body.contract_number);
+    if (body.contract_start_date !== undefined) payload.contract_start_date = clean(body.contract_start_date);
+    if (body.contract_end_date !== undefined) payload.contract_end_date = clean(body.contract_end_date);
+    if (body.contract_value !== undefined) payload.contract_value = body.contract_value === '' || body.contract_value == null ? null : Number(body.contract_value);
+    if (body.owner_entity !== undefined) payload.owner_entity = clean(body.owner_entity);
+    if (body.supervisor_name !== undefined) payload.supervisor_name = clean(body.supervisor_name);
 
     const result = await work.from('projects').update(payload).eq('id', params.projectId).is('deleted_at', null)
-      .select('id,name,code,municipality,contractor_name,status,description,created_at,updated_at,deleted_at').single();
+      .select('id,name,code,municipality,contractor_name,status,description,contract_number,contract_start_date,contract_end_date,contract_value,owner_entity,supervisor_name,created_at,updated_at,deleted_at').single();
     if (result.error) throw result.error;
     return NextResponse.json({ project: result.data });
   } catch (error) {

@@ -13,6 +13,12 @@ import { getWorkOrderTiming } from '@/lib/work-order-timing';
   contractor_name: string | null;
   status: string | null;
   description: string | null;
+  contract_number: string | null;
+  contract_start_date: string | null;
+  contract_end_date: string | null;
+  contract_value: number | null;
+  owner_entity: string | null;
+  supervisor_name: string | null;
   created_at: string | null;
 };
 
@@ -38,9 +44,15 @@ type ProjectSummary = Project & {
 
 type SortKey = 'name' | 'orders' | 'sites' | 'activity';
 type ViewMode = 'cards' | 'table';
-type ProjectForm = { name: string; code: string; municipality: string; contractor_name: string; status: string; description: string };
+type ProjectForm = {
+  name: string; code: string; municipality: string; contractor_name: string; status: string; description: string;
+  contract_number: string; contract_start_date: string; contract_end_date: string; contract_value: string; owner_entity: string; supervisor_name: string;
+};
 
-const emptyProjectForm: ProjectForm = { name: '', code: '', municipality: '', contractor_name: '', status: 'active', description: '' };
+const emptyProjectForm: ProjectForm = {
+  name: '', code: '', municipality: '', contractor_name: '', status: 'active', description: '',
+  contract_number: '', contract_start_date: '', contract_end_date: '', contract_value: '', owner_entity: '', supervisor_name: '',
+};
 
 function compactName(name: string) {
   return name
@@ -78,6 +90,7 @@ export default function ProjectsPage() {
   const [saving, setSaving] = useState(false);
   const [actionProjectId, setActionProjectId] = useState('');
   const [menuProjectId, setMenuProjectId] = useState('');
+  const [createdProject, setCreatedProject] = useState<Project | null>(null);
 
   useEffect(() => { void loadProjects(); }, []);
 
@@ -87,7 +100,7 @@ export default function ProjectsPage() {
     setError('');
 
     const [projectResult, siteResult, orderResult, boqResult] = await Promise.all([
-      supabase.from('projects').select('id,name,code,municipality,contractor_name,status,description,created_at').order('created_at', { ascending: false }),
+      supabase.from('projects').select('id,name,code,municipality,contractor_name,status,description,contract_number,contract_start_date,contract_end_date,contract_value,owner_entity,supervisor_name,created_at').order('created_at', { ascending: false }),
       supabase.from('sites').select('id,project_id'),
       supabase.from('work_orders').select('id,project_id,work_order_date,work_order_end_date,status'),
       supabase.from('project_boq_items').select('project_id'),
@@ -120,6 +133,12 @@ export default function ProjectsPage() {
       contractor_name: project.contractor_name || '',
       status: project.status || 'active',
       description: project.description || '',
+      contract_number: project.contract_number || '',
+      contract_start_date: project.contract_start_date || '',
+      contract_end_date: project.contract_end_date || '',
+      contract_value: project.contract_value == null ? '' : String(project.contract_value),
+      owner_entity: project.owner_entity || '',
+      supervisor_name: project.supervisor_name || '',
     });
     setEditorOpen(true);
     setMenuProjectId('');
@@ -140,8 +159,12 @@ export default function ProjectsPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'تعذر حفظ المشروع.');
-      setEditorOpen(false);
-      setMessage(editingProject ? 'تم تحديث بيانات المشروع بنجاح.' : 'تم إنشاء المشروع بنجاح.');
+      if (editingProject) {
+        setEditorOpen(false);
+        setMessage('تم تحديث بيانات المشروع بنجاح.');
+      } else {
+        setCreatedProject(data.project as Project);
+      }
       await loadProjects();
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : 'تعذر حفظ المشروع.');
@@ -324,6 +347,11 @@ export default function ProjectsPage() {
                 <h3 title={project.name}>{compactName(project.name)}</h3>
                 <p>{[project.municipality, project.contractor_name].filter(Boolean).join(' · ') || project.description || 'لا توجد بيانات تعريفية إضافية.'}</p>
                 {project.code && <code>{project.code}</code>}
+                {(project.contract_number || project.contract_start_date || project.contract_end_date) ? <div className="project-contract-brief">
+                  {project.contract_number ? <span>عقد {project.contract_number}</span> : null}
+                  {project.contract_start_date ? <span>من {project.contract_start_date}</span> : null}
+                  {project.contract_end_date ? <span>إلى {project.contract_end_date}</span> : null}
+                </div> : null}
               </div>
               <div className="project-card-metrics">
                 <div><small>المواقع</small><strong>{project.sitesCount}</strong></div>
@@ -376,20 +404,39 @@ export default function ProjectsPage() {
 
       {!loading && filtered.length === 0 && <div className="projects-empty-state"><b>لا توجد مشاريع مطابقة</b><span>غيّر عبارة البحث أو الفلاتر المستخدمة.</span><button className="btn" onClick={() => { setQuery(''); setStatusFilter('all'); setTimingFilter('all'); }}>إعادة ضبط الفلاتر</button></div>}
 
-      {editorOpen ? <div className="project-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setEditorOpen(false); }}>
+      {editorOpen ? <div className="project-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) { setEditorOpen(false); setCreatedProject(null); } }}>
         <section className="project-editor-modal" role="dialog" aria-modal="true" aria-label={editingProject ? 'تعديل المشروع' : 'إنشاء مشروع جديد'}>
           <div className="project-editor-head">
             <div><span className="eyebrow">{editingProject ? 'تعديل البيانات' : 'إضافة مشروع'}</span><h2>{editingProject ? 'تحديث المشروع' : 'مشروع جديد'}</h2><p>أدخل البيانات التعريفية الأساسية. يمكن إضافة المواقع والبنود وأوامر العمل بعد الحفظ.</p></div>
-            <button type="button" onClick={() => setEditorOpen(false)} disabled={saving} aria-label="إغلاق">×</button>
+            <button type="button" onClick={() => { setEditorOpen(false); setCreatedProject(null); }} disabled={saving} aria-label="إغلاق">×</button>
           </div>
           <form className="project-editor-form" onSubmit={saveProject}>
+            {createdProject && !editingProject ? <div className="project-create-success wide">
+              <div className="project-create-success-icon">✓</div>
+              <span className="eyebrow">تم الإنشاء بنجاح</span>
+              <h3>{createdProject.name}</h3>
+              <p>أصبح المشروع جاهزًا لإضافة المواقع وبنود العقد وإنشاء أوامر العمل.</p>
+              <div className="project-create-next-actions">
+                <Link href={`/project/${createdProject.id}`} className="btn primary">فتح المشروع وإضافة البيانات</Link>
+                <Link href={`/sites?project=${createdProject.id}`} className="btn">إدارة المواقع</Link>
+                <Link href={`/items?project=${createdProject.id}`} className="btn">إدارة البنود</Link>
+                <button type="button" className="btn" onClick={() => { setCreatedProject(null); setForm(emptyProjectForm); }}>إنشاء مشروع آخر</button>
+              </div>
+            </div> : <>
             <label className="wide"><span>اسم المشروع *</span><input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required autoFocus /></label>
             <label><span>رمز المشروع</span><input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} placeholder="مثال: PRJ-07" /></label>
             <label><span>الحالة</span><select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="active">نشط</option><option value="paused">متوقف</option><option value="completed">منتهي</option><option value="archived">مؤرشف</option></select></label>
             <label><span>البلدية</span><input value={form.municipality} onChange={(event) => setForm((current) => ({ ...current, municipality: event.target.value }))} /></label>
             <label><span>المقاول</span><input value={form.contractor_name} onChange={(event) => setForm((current) => ({ ...current, contractor_name: event.target.value }))} /></label>
+            <label><span>رقم العقد</span><input value={form.contract_number} onChange={(event) => setForm((current) => ({ ...current, contract_number: event.target.value }))} placeholder="مثال: 2026/17" /></label>
+            <label><span>الجهة المالكة</span><input value={form.owner_entity} onChange={(event) => setForm((current) => ({ ...current, owner_entity: event.target.value }))} placeholder="مثال: أمانة محافظة جدة" /></label>
+            <label><span>تاريخ بداية العقد</span><input type="date" value={form.contract_start_date} onChange={(event) => setForm((current) => ({ ...current, contract_start_date: event.target.value }))} /></label>
+            <label><span>تاريخ نهاية العقد</span><input type="date" value={form.contract_end_date} onChange={(event) => setForm((current) => ({ ...current, contract_end_date: event.target.value }))} /></label>
+            <label><span>قيمة العقد</span><input type="number" min="0" step="0.01" value={form.contract_value} onChange={(event) => setForm((current) => ({ ...current, contract_value: event.target.value }))} placeholder="0.00" /></label>
+            <label><span>المشرف المسؤول</span><input value={form.supervisor_name} onChange={(event) => setForm((current) => ({ ...current, supervisor_name: event.target.value }))} /></label>
             <label className="wide"><span>الوصف</span><textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={4} /></label>
             <div className="project-editor-actions"><button type="button" className="btn" onClick={() => setEditorOpen(false)} disabled={saving}>إلغاء</button><button type="submit" className="btn primary" disabled={saving}>{saving ? 'جاري الحفظ...' : editingProject ? 'حفظ التعديلات' : 'إنشاء المشروع'}</button></div>
+            </>}
           </form>
         </section>
       </div> : null}
