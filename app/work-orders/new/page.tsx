@@ -182,6 +182,18 @@ export default function NewWorkOrderPage() {
     setItemToAdd('');
     setDraftQuantity('');
 
+    // مزامنة مواقع مشروع الري أولًا، ثم قراءة المعرّفات المحلية من جدول sites.
+    // إذا لم يكن المشروع مربوطًا بعد، تستمر الشاشة وتعرض المواقع المحلية الموجودة فقط.
+    try {
+      await fetch('/api/irrigation/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workProjectId: id }),
+      });
+    } catch {
+      // لا نوقف إنشاء أمر العمل عند تعذر الاتصال المؤقت بقاعدة الري.
+    }
+
     const [sitesResult, boqResult, ordersResult, contractsResult] = await Promise.all([
       supabase.from('sites').select('id,name').eq('project_id', id).eq('status', 'active').order('name'),
       supabase.from('project_boq_items').select('id,item_id,boq_item_no,unit,contract_quantity,unit_price,items(id,name,unit)').eq('project_id', id).order('boq_item_no'),
@@ -463,6 +475,7 @@ export default function NewWorkOrderPage() {
           <div><span className="section-kicker">الخطوة 02</span><h2>نطاق المواقع</h2></div>
           <div className="site-selection-summary">
             <strong className="selected-count-badge">{selectedSiteIds.length} موقع محدد</strong>
+            {projectId ? <span className="sites-source-note">المواقع متزامنة من نظام الري</span> : null}
             {selectedSiteIds.length ? (
               <span>{sites.filter((site) => selectedSiteIds.includes(site.id)).slice(0, 3).map((site) => site.name).join(' • ')}{selectedSiteIds.length > 3 ? ` • +${selectedSiteIds.length - 3}` : ''}</span>
             ) : null}

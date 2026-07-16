@@ -32,3 +32,13 @@
 - عداد تنازلي للأوامر الجارية مع نسبة التقدم الزمني.
 - بيان للأوامر المنتهية بعدد الأيام منذ الانتهاء.
 - توحيد المؤشر الزمني في السجل التاريخي وصفحة تفاصيل أمر العمل.
+
+## ربط مواقع مشروع الري
+1. نفّذ `supabase_irrigation_link_migration.sql` داخل قاعدة `work-orders-db`.
+2. أضف متغيرات Vercel التالية (Server-side فقط، دون NEXT_PUBLIC):
+   - `SUPABASE_SERVICE_ROLE_KEY` لمشروع work-orders-db
+   - `IRRIGATION_SUPABASE_URL` رابط مشروع garden-irrigation-system
+   - `IRRIGATION_SUPABASE_SERVICE_ROLE_KEY` مفتاح service_role لمشروع garden-irrigation-system
+3. أعد النشر.
+4. افتح **إدارة النظام**، وطابق كل مشروع مع مشروع الري المقابل، ثم اضغط **ربط ومزامنة**.
+5. شاشة إنشاء أمر العمل ستزامن المواقع تلقائيًا عند اختيار المشروع وتقرأها من جدول `sites` المحلي.

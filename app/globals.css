@@ -1091,3 +1091,25 @@ body{margin:0;background:var(--shell-bg)}
     width: 100%;
   }
 }
+
+/* === IRRIGATION PROJECT LINK V30 === */
+.irrigation-link-page { max-width: 1240px; }
+.integration-message { margin: 0 0 14px; padding: 13px 16px; border: 1px solid rgba(195,154,73,.35); border-radius: 15px; background: #fff8df; color: #765000; font-weight: 800; }
+.integration-panel { padding: 20px; border: 1px solid rgba(195,154,73,.30); border-radius: 26px; background: rgba(255,252,244,.92); box-shadow: 0 18px 42px rgba(19,70,57,.08); }
+.integration-panel-head { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px; }
+.integration-panel-head > div { padding: 13px 15px; border-radius: 16px; background: #f5f1e5; }
+.integration-panel-head small, .integration-project-row small { display: block; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+.integration-project-list { display: grid; gap: 10px; }
+.integration-project-row { display: grid; grid-template-columns: minmax(0,1.35fr) 36px minmax(260px,1fr) minmax(160px,.55fr); gap: 12px; align-items: center; padding: 14px; border: 1px solid rgba(195,154,73,.24); border-radius: 18px; background: #fff; }
+.integration-work-project { min-width: 0; }
+.integration-work-project strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
+.integration-work-project span { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
+.integration-arrow { text-align: center; color: var(--gold); font-size: 24px; font-weight: 900; }
+.integration-project-row label select { width: 100%; min-height: 45px; border: 1px solid rgba(195,154,73,.35); border-radius: 12px; padding: 0 12px; background: #fff; color: var(--green-900); }
+.integration-action { display: grid; gap: 6px; justify-items: stretch; }
+.integration-action button { min-height: 42px; border: 0; border-radius: 12px; background: var(--green); color: #fff; font-weight: 900; cursor: pointer; }
+.integration-action button:disabled { opacity: .6; cursor: wait; }
+.linked-state { justify-self: start; padding: 5px 9px; border-radius: 999px; background: #f4ece2; color: #905b2c; font-size: 11px; font-weight: 900; }
+.linked-state.yes { background: #e5f4ec; color: #176a4f; }
+.sites-source-note { color: #25735a !important; font-weight: 800; }
+@media (max-width: 900px) { .integration-project-row { grid-template-columns: 1fr; } .integration-arrow { transform: rotate(-90deg); } .integration-panel-head { grid-template-columns: 1fr; } }
