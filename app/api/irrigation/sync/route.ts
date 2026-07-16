@@ -50,10 +50,79 @@ export async function POST(request: NextRequest) {
       synced_at: now,
     }));
 
-    if (rows.length) {
-      const upsert = await work.from('sites').upsert(rows, { onConflict: 'source_system,source_site_id' });
-      if (upsert.error) throw upsert.error;
+    for (const row of rows) {
+  const existingBySource = await work
+    .from('sites')
+    .select('id')
+    .eq('source_system', row.source_system)
+    .eq('source_site_id', row.source_site_id)
+    .maybeSingle();
+
+  if (existingBySource.error) {
+    throw existingBySource.error;
+  }
+
+  if (existingBySource.data) {
+    const updateBySource = await work
+      .from('sites')
+      .update({
+        project_id: row.project_id,
+        name: row.name,
+        normalized_name: row.normalized_name,
+        status: row.status,
+        source_project_id: row.source_project_id,
+        source_code: row.source_code,
+        source_district: row.source_district,
+        synced_at: row.synced_at,
+      })
+      .eq('id', existingBySource.data.id);
+
+    if (updateBySource.error) {
+      throw updateBySource.error;
     }
+
+    continue;
+  }
+
+  const existingByName = await work
+    .from('sites')
+    .select('id')
+    .eq('project_id', row.project_id)
+    .eq('name', row.name)
+    .maybeSingle();
+
+  if (existingByName.error) {
+    throw existingByName.error;
+  }
+
+  if (existingByName.data) {
+    const attachExistingSite = await work
+      .from('sites')
+      .update({
+        normalized_name: row.normalized_name,
+        status: row.status,
+        source_system: row.source_system,
+        source_site_id: row.source_site_id,
+        source_project_id: row.source_project_id,
+        source_code: row.source_code,
+        source_district: row.source_district,
+        synced_at: row.synced_at,
+      })
+      .eq('id', existingByName.data.id);
+
+    if (attachExistingSite.error) {
+      throw attachExistingSite.error;
+    }
+
+    continue;
+  }
+
+  const insertSite = await work.from('sites').insert(row);
+
+  if (insertSite.error) {
+    throw insertSite.error;
+  }
+}
 
     const syncedSourceIds = rows.map((row) => row.source_site_id);
     const existing = await work.from('sites')
