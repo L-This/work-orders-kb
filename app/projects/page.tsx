@@ -73,7 +73,7 @@ function statusLabel(status: string | null) {
 }
 
 
-function ProjectMenuIcon({ name }: { name: 'edit' | 'contract' | 'sites' | 'items' | 'orders' | 'stats' | 'archive' | 'restore' | 'trash' }) {
+function ProjectMenuIcon({ name }: { name: 'edit' | 'contract' | 'sites' | 'items' | 'orders' | 'stats' | 'archive' | 'restore' | 'trash' | 'user' | 'clock' }) {
   const paths: Record<string, ReactNode> = {
     edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></>,
     contract: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></>,
@@ -84,6 +84,8 @@ function ProjectMenuIcon({ name }: { name: 'edit' | 'contract' | 'sites' | 'item
     archive: <><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v12h16V8"/><path d="M10 12h4"/></>,
     restore: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></>,
     trash: <><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 15H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></>,
+    user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
+    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
   };
   return <svg className="project-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -383,13 +385,15 @@ export default function ProjectsPage() {
                   <button type="button" className="project-more-button" aria-label="إجراءات المشروع" onClick={() => setMenuProjectId((current) => current === project.id ? '' : project.id)}>⋮</button>
                   {menuProjectId === project.id ? <div className="project-action-menu">
                     <button type="button" onClick={() => openEditProject(project)}><ProjectMenuIcon name="edit" /><span>تعديل المشروع</span></button>
+                    <div className="project-action-separator" aria-hidden="true" />
                     <button type="button" onClick={() => { openEditProject(project); setEditorTab('contract'); }}><ProjectMenuIcon name="contract" /><span>بيانات العقد</span></button>
                     <Link href={`/sites?project=${project.id}`}><ProjectMenuIcon name="sites" /><span>إدارة المواقع</span></Link>
                     <Link href={`/items?project=${project.id}`}><ProjectMenuIcon name="items" /><span>إدارة البنود</span></Link>
                     <Link href={`/work-orders?project=${project.id}`}><ProjectMenuIcon name="orders" /><span>أوامر العمل</span></Link>
-                    <button type="button" onClick={() => { setStatsProject(project); setMenuProjectId(''); }}><ProjectMenuIcon name="stats" /><span>إحصائيات المشروع</span></button>
                     <div className="project-action-separator" aria-hidden="true" />
+                    <button type="button" onClick={() => { setStatsProject(project); setMenuProjectId(''); }}><ProjectMenuIcon name="stats" /><span>إحصائيات المشروع</span></button>
                     <button type="button" onClick={() => void archiveProject(project)} disabled={actionProjectId === project.id}><ProjectMenuIcon name={project.status === 'archived' ? 'restore' : 'archive'} /><span>{project.status === 'archived' ? 'إعادة التنشيط' : 'أرشفة المشروع'}</span></button>
+                    <div className="project-action-separator" aria-hidden="true" />
                     <button type="button" className="danger" onClick={() => { setDeleteProject(project); setMenuProjectId(''); }} disabled={actionProjectId === project.id}><ProjectMenuIcon name="trash" /><span>حذف المشروع</span></button>
                   </div> : null}
                 </div>
@@ -403,9 +407,9 @@ export default function ProjectsPage() {
                   {project.contract_start_date ? <span>من {project.contract_start_date}</span> : null}
                   {project.contract_end_date ? <span>إلى {project.contract_end_date}</span> : null}
                 </div> : null}
-                <div className="project-card-detail-line">
-                  <span><b>المشرف:</b> {project.supervisor_name || 'غير مسجل'}</span>
-                  <span><b>آخر تحديث:</b> {relativeUpdate(project.updated_at || project.created_at)}</span>
+                <div className="project-card-info-strip">
+                  <span><ProjectMenuIcon name="user" /><span><small>المشرف</small><b>{project.supervisor_name || 'غير مسجل'}</b></span></span>
+                  <span><ProjectMenuIcon name="clock" /><span><small>آخر تحديث</small><b>{relativeUpdate(project.updated_at || project.created_at)}</b></span></span>
                 </div>
               </div>
               {contractProgress(project) ? <div className="project-contract-progress">
@@ -424,11 +428,13 @@ export default function ProjectsPage() {
                 <span><i className="timing-dot ending" /> تنتهي قريبًا <b>{project.endingSoonOrders}</b></span>
                 <span><i className="timing-dot ended" /> منتهية <b>{project.endedOrders}</b></span>
               </div>
-              <div className="project-card-actions project-card-actions-four">
-                <Link href={`/project/${project.id}`} className="btn primary">فتح المشروع</Link>
-                <Link href={`/work-orders?project=${project.id}`} className="btn">أوامر العمل</Link>
-                <Link href={`/sites?project=${project.id}`} className="btn">المواقع</Link>
-                <Link href={`/items?project=${project.id}`} className="btn">البنود</Link>
+              <div className="project-card-actions project-card-actions-hierarchy">
+                <Link href={`/project/${project.id}`} className="btn primary project-open-main">فتح المشروع</Link>
+                <div className="project-card-shortcuts">
+                  <Link href={`/sites?project=${project.id}`} className="btn">المواقع</Link>
+                  <Link href={`/items?project=${project.id}`} className="btn">البنود</Link>
+                  <Link href={`/work-orders?project=${project.id}`} className="btn">أوامر العمل</Link>
+                </div>
               </div>
             </article>
           ))}
@@ -486,9 +492,16 @@ export default function ProjectsPage() {
                 <button type="button" className="btn" onClick={() => { setCreatedProject(null); setForm(emptyProjectForm); }}>إنشاء مشروع آخر</button>
               </div>
             </div> : <>
-            <div className="project-editor-tabs wide">
-              <button type="button" className={editorTab === 'basic' ? 'active' : ''} onClick={() => setEditorTab('basic')}>البيانات الأساسية</button>
-              <button type="button" className={editorTab === 'contract' ? 'active' : ''} onClick={() => setEditorTab('contract')}>بيانات العقد</button>
+            <div className="project-editor-tabs project-wizard-tabs wide">
+              <button type="button" className={editorTab === 'basic' ? 'active' : editorTab === 'contract' ? 'complete' : ''} onClick={() => setEditorTab('basic')}>
+                <span className="wizard-step-mark">{editorTab === 'contract' ? '✓' : '1'}</span>
+                <span><small>الخطوة الأولى</small><b>البيانات الأساسية</b></span>
+              </button>
+              <span className="wizard-connector" aria-hidden="true" />
+              <button type="button" className={editorTab === 'contract' ? 'active' : ''} onClick={() => setEditorTab('contract')}>
+                <span className="wizard-step-mark">2</span>
+                <span><small>الخطوة الثانية</small><b>بيانات العقد</b></span>
+              </button>
             </div>
             <div key={editorTab} className="project-editor-tab-panel wide">
             {editorTab === 'basic' ? <>

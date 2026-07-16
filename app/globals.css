@@ -1461,3 +1461,119 @@ body{margin:0;background:var(--shell-bg)}
 .project-card-detail-line{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed #e9dcc4;color:#6d746f;font-size:11px}
 .project-card-detail-line b{color:#2d5f53;font-weight:900}
 @media(max-width:700px){.project-editor-tab-panel{grid-template-columns:1fr}.project-editor-tabs button{min-height:52px;font-size:15px}.project-card-detail-line{align-items:flex-start;flex-direction:column}}
+
+/* Projects management — compact wizard and grouped actions */
+.project-wizard-tabs{
+  width:min(520px,100%);
+  justify-self:end;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 34px minmax(0,1fr);
+  align-items:center;
+  gap:8px;
+  padding:6px;
+}
+.project-wizard-tabs button{
+  min-height:52px;
+  padding:8px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  text-align:right;
+}
+.project-wizard-tabs button>span:last-child{display:grid;gap:1px}
+.project-wizard-tabs button small{font-size:10px;font-weight:700;color:#8b8f89}
+.project-wizard-tabs button b{font-size:14px;color:inherit}
+.wizard-step-mark{
+  width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  flex:0 0 30px;border:1px solid #d8c9aa;background:#fff;color:#6e746f;font-weight:900;
+}
+.project-wizard-tabs button.active .wizard-step-mark,
+.project-wizard-tabs button.complete .wizard-step-mark{background:var(--green);border-color:var(--green);color:#fff}
+.project-wizard-tabs button.complete{color:var(--green)}
+.wizard-connector{height:2px;background:linear-gradient(90deg,#d8c9aa,#c5a25d,#d8c9aa);border-radius:999px}
+.project-action-menu{width:224px}
+.project-action-separator{margin:6px 6px}
+.project-card-detail-line span{display:inline-flex;align-items:center;gap:6px}
+.project-card-detail-line .project-menu-icon{width:15px;height:15px;flex-basis:15px;color:#4b776c}
+@media(max-width:700px){
+  .project-wizard-tabs{grid-template-columns:1fr;justify-self:stretch;width:100%}
+  .wizard-connector{width:2px;height:18px;justify-self:center}
+  .project-wizard-tabs button{justify-content:flex-start}
+}
+
+/* Projects management — final visual refinements v36 */
+.project-wizard-tabs{
+  width:min(620px,100%);
+  justify-self:center;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(80px,1fr) minmax(0,1fr);
+  align-items:center;
+  gap:0;
+  padding:0;
+  background:transparent;
+  border:0;
+  border-radius:0;
+}
+.project-wizard-tabs button{
+  min-height:62px;
+  padding:8px 10px;
+  justify-content:center;
+  background:transparent;
+  border:0;
+  box-shadow:none;
+}
+.project-wizard-tabs button:hover{transform:none;background:transparent}
+.project-wizard-tabs button.active{background:transparent;box-shadow:none}
+.project-wizard-tabs button>span:last-child{display:grid;gap:2px;text-align:right}
+.project-wizard-tabs button small{font-size:10px;color:#8a8f89}
+.project-wizard-tabs button b{font-size:14px}
+.wizard-step-mark{
+  width:36px;height:36px;flex-basis:36px;
+  border:2px solid #d7c6a1;
+  box-shadow:0 4px 12px rgba(19,72,57,.06);
+}
+.project-wizard-tabs button.active .wizard-step-mark,
+.project-wizard-tabs button.complete .wizard-step-mark{
+  box-shadow:0 7px 18px rgba(19,72,57,.18);
+}
+.wizard-connector{
+  width:100%;height:2px;
+  background:linear-gradient(90deg,#d8c9aa,#c6a355,#d8c9aa);
+  position:relative;
+}
+.wizard-connector:after{
+  content:"";position:absolute;inset:-3px 0;border-radius:999px;
+  background:rgba(198,163,85,.08);
+}
+.project-card-info-strip{
+  margin-top:11px;
+  padding:10px 12px;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  border:1px solid #eadfc9;
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(250,247,238,.96),rgba(255,253,248,.96));
+}
+.project-card-info-strip>span{
+  min-width:0;display:flex;align-items:center;gap:8px;color:#4b776c;
+}
+.project-card-info-strip .project-menu-icon{width:17px;height:17px;flex:0 0 17px}
+.project-card-info-strip>span>span{min-width:0;display:grid;gap:1px}
+.project-card-info-strip small{font-size:9px;color:#8a8f89}
+.project-card-info-strip b{font-size:11px;color:#2d5f53;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.project-card-actions-hierarchy{display:grid;grid-template-columns:1fr;gap:8px}
+.project-card-actions-hierarchy .project-open-main{width:100%;min-height:43px;font-size:13px}
+.project-card-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.project-card-shortcuts .btn{min-height:36px;padding:7px 5px;font-size:11px;justify-content:center}
+.project-action-menu .project-menu-icon{stroke-width:2.1}
+.project-action-menu a,.project-action-menu button{min-height:37px}
+@media(max-width:700px){
+  .project-wizard-tabs{grid-template-columns:1fr 42px 1fr;width:100%}
+  .project-wizard-tabs button{justify-content:center;min-height:58px;padding-inline:4px}
+  .project-wizard-tabs button small{display:none}
+  .wizard-connector{width:100%;height:2px;justify-self:stretch}
+  .project-card-info-strip{grid-template-columns:1fr}
+  .project-card-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
