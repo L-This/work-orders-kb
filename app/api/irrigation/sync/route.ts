@@ -76,7 +76,36 @@ export async function POST(request: NextRequest) {
     if (updateLink.error) throw updateLink.error;
 
     return NextResponse.json({ synced: rows.length, deactivated: staleIds.length, syncedAt: now });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'تعذرت مزامنة المواقع.' }, { status: 500 });
+    } catch (error: unknown) {
+    console.error('Irrigation sites sync failed:', error);
+
+    const details =
+      error && typeof error === 'object'
+        ? error as {
+            message?: string;
+            details?: string;
+            hint?: string;
+            code?: string;
+          }
+        : null;
+
+    const parts = [
+      details?.message,
+      details?.details,
+      details?.hint,
+      details?.code ? `الرمز: ${details.code}` : null,
+    ].filter(Boolean);
+
+    return NextResponse.json(
+      {
+        error:
+          parts.length > 0
+            ? parts.join(' — ')
+            : error instanceof Error
+              ? error.message
+              : 'تعذرت مزامنة المواقع.',
+      },
+      { status: 500 },
+    );
   }
 }
