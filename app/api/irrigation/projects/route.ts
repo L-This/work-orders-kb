@@ -15,6 +15,8 @@ export async function GET() {
     ]);
 
     const error = workProjects.error || irrigationProjects.error || links.error;
+      console.log('LINKS FROM API:', links.data);
+      console.log('WORK PROJECTS:', workProjects.data);
     if (error) throw error;
 
     return NextResponse.json({
