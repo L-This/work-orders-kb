@@ -144,8 +144,14 @@ async function saveAndSync(workProjectId: string) {
       {loading ? <div className="module-empty">جاري تحميل المشاريع...</div> : (
         <div className="integration-project-list">
           {workProjects.map((project) => {
-            const linked = linkMap.get(project.id);
-            return <article className="integration-project-row" key={project.id}>
+  const linked = linkMap.get(project.id);
+
+  console.log({
+    projectId: project.id,
+    linked,
+  });
+
+  return ( <article className="integration-project-row" key={project.id}>
               <div className="integration-work-project">
                 <small>مشروع أوامر العمل</small>
                 <strong>{project.name}</strong>
