@@ -571,14 +571,28 @@ body{margin:0;background:var(--shell-bg)}
   text-overflow: ellipsis;
 }
 
-@media (min-width: 1500px) {
-  .project-table-name-link b {
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    max-height: 4.8em;
-  }
 
-  .projects-management-table tbody tr {
-    height: 96px;
-  }
+/* === PROJECT TABLE STRICT TWO-LINE CLAMP V22 === */
+.projects-management-table tbody tr {
+  height: 82px;
+}
+
+.project-table-name-link b {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.55;
+  min-height: 3.1em;
+  max-height: 3.1em;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+.projects-management-table .project-table-name-cell small {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
