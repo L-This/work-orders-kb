@@ -44,6 +44,9 @@ type EnrichedOrder = OrderRow & {
 type ViewMode = 'cards' | 'table';
 type TimingFilter = 'all' | 'active' | 'upcoming' | 'ending' | 'ended' | 'unscheduled';
 type SortMode = 'newest' | 'ending' | 'starting' | 'number';
+type OrderForm = { title: string; work_order_date: string; work_order_end_date: string; duration_days: string; contractor_name: string; notes: string; status: string };
+
+const emptyOrderForm: OrderForm = { title: '', work_order_date: '', work_order_end_date: '', duration_days: '', contractor_name: '', notes: '', status: 'approved' };
 
 const formatDate = (value: string | null, short = false) =>
   value
@@ -82,6 +85,12 @@ export default function OrdersPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [openMenuId, setOpenMenuId] = useState('');
+  const [editingOrder, setEditingOrder] = useState<EnrichedOrder | null>(null);
+  const [deleteOrder, setDeleteOrder] = useState<EnrichedOrder | null>(null);
+  const [form, setForm] = useState<OrderForm>(emptyOrderForm);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => { void load(); }, []);
 
@@ -173,6 +182,75 @@ export default function OrdersPage() {
     });
   }, [enrichedOrders, projectFilter, query, sortMode, statusFilter, timingFilter]);
 
+
+  function beginEdit(order: EnrichedOrder) {
+    setOpenMenuId('');
+    setEditingOrder(order);
+    setForm({
+      title: order.title || '',
+      work_order_date: order.work_order_date || '',
+      work_order_end_date: order.work_order_end_date || '',
+      duration_days: order.duration_days == null ? '' : String(order.duration_days),
+      contractor_name: order.contractor_name || '',
+      notes: order.notes || '',
+      status: order.status || 'approved',
+    });
+  }
+
+  async function updateOrder(payload?: Partial<OrderForm>) {
+    if (!editingOrder && !payload) return;
+    const target = editingOrder;
+    if (!target) return;
+    setSaving(true); setMessage(''); setSuccessMessage('');
+    try {
+      const response = await fetch(`/api/work-orders/${target.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || form),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'تعذر تعديل أمر العمل.');
+      setSuccessMessage(`تم تحديث أمر العمل رقم ${target.work_order_number} بنجاح.`);
+      setEditingOrder(null);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'تعذر تعديل أمر العمل.');
+    } finally { setSaving(false); }
+  }
+
+  async function quickStatus(order: EnrichedOrder, status: string) {
+    setOpenMenuId('');
+    setEditingOrder(order);
+    setForm({
+      title: order.title || '', work_order_date: order.work_order_date || '', work_order_end_date: order.work_order_end_date || '',
+      duration_days: order.duration_days == null ? '' : String(order.duration_days), contractor_name: order.contractor_name || '', notes: order.notes || '', status,
+    });
+    setSaving(true); setMessage(''); setSuccessMessage('');
+    try {
+      const response = await fetch(`/api/work-orders/${order.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'تعذر تحديث الحالة.');
+      setSuccessMessage(status === 'cancelled' ? `تم إلغاء أمر العمل رقم ${order.work_order_number}.` : `تم تحديث حالة أمر العمل رقم ${order.work_order_number}.`);
+      setEditingOrder(null);
+      await load();
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'تعذر تحديث الحالة.'); }
+    finally { setSaving(false); }
+  }
+
+  async function confirmDelete() {
+    if (!deleteOrder) return;
+    setSaving(true); setMessage(''); setSuccessMessage('');
+    try {
+      const response = await fetch(`/api/work-orders/${deleteOrder.id}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'تعذر حذف أمر العمل.');
+      setSuccessMessage(`تم حذف أمر العمل رقم ${deleteOrder.work_order_number}.`);
+      setDeleteOrder(null);
+      await load();
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'تعذر حذف أمر العمل.'); }
+    finally { setSaving(false); }
+  }
+
   const totalSites = new Set(orderSites.map((row) => row.site_id)).size;
   const totalExecutionValue = orderItems.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0);
 
@@ -192,6 +270,7 @@ export default function OrdersPage() {
       </section>
 
       {message ? <div className="notice error-notice">{message}</div> : null}
+      {successMessage ? <div className="notice success-notice">{successMessage}</div> : null}
 
       <section className="work-orders-executive-stats">
         <button onClick={() => setTimingFilter('all')} className={timingFilter === 'all' ? 'active' : ''}><small>إجمالي الأوامر</small><strong>{orders.length}</strong><span>أمر مسجل</span></button>
@@ -222,7 +301,20 @@ export default function OrdersPage() {
               <article className={`work-order-operation-card ${timingClass(order.timing)}`} key={order.id}>
                 <div className="operation-card-head">
                   <div className="work-order-number">{order.work_order_number}</div>
-                  <div><span className="badge">{statusLabel(order.status)}</span><small>{order.timing.compactLabel}</small></div>
+                  <div className="operation-card-status"><span className="badge">{statusLabel(order.status)}</span><small>{order.timing.compactLabel}</small></div>
+                  <div className="order-actions-menu">
+                    <button type="button" className="order-menu-trigger" onClick={() => setOpenMenuId((current) => current === order.id ? '' : order.id)} aria-label="إجراءات أمر العمل">⋮</button>
+                    {openMenuId === order.id ? <div className="order-menu-popover">
+                      <button onClick={() => beginEdit(order)}>تعديل بيانات الأمر</button>
+                      <Link href={`/work-order/${order.id}`}>فتح التفاصيل</Link>
+                      {order.projects?.id ? <Link href={`/project/${order.projects.id}`}>فتح المشروع</Link> : null}
+                      <span className="menu-separator" />
+                      {order.status !== 'completed' ? <button onClick={() => void quickStatus(order, 'completed')}>تحديد كمكتمل</button> : null}
+                      {order.status !== 'cancelled' ? <button onClick={() => void quickStatus(order, 'cancelled')}>إلغاء أمر العمل</button> : null}
+                      <span className="menu-separator" />
+                      <button className="danger" onClick={() => { setOpenMenuId(''); setDeleteOrder(order); }}>حذف أمر العمل</button>
+                    </div> : null}
+                  </div>
                 </div>
 
                 <div className="operation-title-block">
@@ -253,13 +345,37 @@ export default function OrdersPage() {
             <table className="work-orders-management-table">
               <colgroup><col className="wo-col-number"/><col className="wo-col-project"/><col className="wo-col-date"/><col className="wo-col-date"/><col className="wo-col-duration"/><col className="wo-col-small"/><col className="wo-col-small"/><col className="wo-col-status"/><col className="wo-col-action"/></colgroup>
               <thead><tr><th>أمر العمل</th><th>المشروع</th><th>البداية</th><th>النهاية</th><th>المدة</th><th>المواقع</th><th>البنود</th><th>الحالة الزمنية</th><th></th></tr></thead>
-              <tbody>{filtered.map((order) => <tr key={order.id}><td><b>{order.work_order_number}</b><small>{statusLabel(order.status)}</small></td><td><Link href={`/work-order/${order.id}`} title={order.projects?.name || ''}><b>{order.title || `أمر عمل رقم ${order.work_order_number}`}</b><small>{order.projects?.name || 'مشروع غير محدد'} • {order.contractor_name || 'المقاول غير مذكور'}</small></Link></td><td>{formatDate(order.work_order_date, true)}</td><td>{formatDate(order.work_order_end_date, true)}</td><td>{order.duration_days || order.timing.totalDays || '—'}</td><td>{order.sitesCount}</td><td>{order.itemsCount}</td><td><span className={`timing-table-pill ${timingClass(order.timing)}`}>{order.timing.compactLabel}</span></td><td><Link href={`/work-order/${order.id}`} className="text-link">فتح ←</Link></td></tr>)}</tbody>
+              <tbody>{filtered.map((order) => <tr key={order.id}><td><b>{order.work_order_number}</b><small>{statusLabel(order.status)}</small></td><td><Link href={`/work-order/${order.id}`} title={order.projects?.name || ''}><b>{order.title || `أمر عمل رقم ${order.work_order_number}`}</b><small>{order.projects?.name || 'مشروع غير محدد'} • {order.contractor_name || 'المقاول غير مذكور'}</small></Link></td><td>{formatDate(order.work_order_date, true)}</td><td>{formatDate(order.work_order_end_date, true)}</td><td>{order.duration_days || order.timing.totalDays || '—'}</td><td>{order.sitesCount}</td><td>{order.itemsCount}</td><td><span className={`timing-table-pill ${timingClass(order.timing)}`}>{order.timing.compactLabel}</span></td><td><div className="table-order-actions"><Link href={`/work-order/${order.id}`} className="text-link">فتح ←</Link><button type="button" onClick={() => beginEdit(order)}>تعديل</button></div></td></tr>)}</tbody>
             </table>
           </div>
         )}
 
         {!loading && filtered.length === 0 ? <div className="empty">لا توجد أوامر عمل مطابقة للفلاتر الحالية.</div> : null}
       </section>
+
+      {editingOrder ? <div className="order-modal-backdrop" onMouseDown={() => !saving && setEditingOrder(null)}>
+        <section className="order-management-modal" onMouseDown={(event) => event.stopPropagation()}>
+          <header><div><span className="eyebrow">إدارة أمر العمل</span><h2>تعديل أمر رقم {editingOrder.work_order_number}</h2><p>{editingOrder.projects?.name || 'مشروع غير محدد'}</p></div><button type="button" onClick={() => setEditingOrder(null)} disabled={saving}>×</button></header>
+          <div className="order-modal-grid">
+            <label className="wide"><span>عنوان أمر العمل</span><input value={form.title} onChange={(e) => setForm((v) => ({ ...v, title: e.target.value }))} /></label>
+            <label><span>تاريخ البداية</span><input type="date" value={form.work_order_date} onChange={(e) => setForm((v) => ({ ...v, work_order_date: e.target.value }))} /></label>
+            <label><span>تاريخ النهاية</span><input type="date" value={form.work_order_end_date} onChange={(e) => setForm((v) => ({ ...v, work_order_end_date: e.target.value }))} /></label>
+            <label><span>المدة بالأيام</span><input type="number" min="0" value={form.duration_days} onChange={(e) => setForm((v) => ({ ...v, duration_days: e.target.value }))} /></label>
+            <label><span>الحالة</span><select value={form.status} onChange={(e) => setForm((v) => ({ ...v, status: e.target.value }))}><option value="approved">معتمد</option><option value="active">نشط</option><option value="completed">مكتمل</option><option value="cancelled">ملغي</option><option value="draft">مسودة</option></select></label>
+            <label className="wide"><span>المقاول</span><input value={form.contractor_name} onChange={(e) => setForm((v) => ({ ...v, contractor_name: e.target.value }))} /></label>
+            <label className="wide"><span>الملاحظات</span><textarea rows={4} value={form.notes} onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))} /></label>
+          </div>
+          <footer><button className="btn primary" onClick={() => void updateOrder()} disabled={saving}>{saving ? 'جاري الحفظ...' : 'حفظ التعديلات'}</button><button className="btn" onClick={() => setEditingOrder(null)} disabled={saving}>إلغاء</button></footer>
+        </section>
+      </div> : null}
+
+      {deleteOrder ? <div className="order-modal-backdrop" onMouseDown={() => !saving && setDeleteOrder(null)}>
+        <section className="order-delete-modal" onMouseDown={(event) => event.stopPropagation()}>
+          <span className="delete-icon">!</span><h2>حذف أمر العمل رقم {deleteOrder.work_order_number}؟</h2><p>سيُحذف الأمر ونطاق المواقع والبنود المحجوزة التابعة له. يمنع النظام الحذف تلقائيًا إذا وُجد تنفيذ فعلي أو مرفقات.</p>
+          <div className="delete-order-summary"><span><small>المواقع</small><b>{deleteOrder.sitesCount}</b></span><span><small>البنود</small><b>{deleteOrder.itemsCount}</b></span><span><small>الحالة</small><b>{statusLabel(deleteOrder.status)}</b></span></div>
+          <footer><button className="btn danger-btn" onClick={() => void confirmDelete()} disabled={saving}>{saving ? 'جاري الحذف...' : 'تأكيد الحذف'}</button><button className="btn" onClick={() => setDeleteOrder(null)} disabled={saving}>تراجع</button></footer>
+        </section>
+      </div> : null}
     </main>
   );
 }

@@ -1577,3 +1577,24 @@ body{margin:0;background:var(--shell-bg)}
   .project-card-info-strip{grid-template-columns:1fr}
   .project-card-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
+
+/* V37 — Work-order management actions */
+.success-notice{background:#e8f5ed;border-color:#b8ddc7;color:#14533d}
+.operation-card-head{position:relative}
+.operation-card-status{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.order-actions-menu{margin-inline-start:auto;position:relative;z-index:12}
+.order-menu-trigger{width:38px;height:38px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--green);font-size:22px;line-height:1;cursor:pointer}
+.order-menu-trigger:hover{border-color:var(--gold);transform:translateY(-1px)}
+.order-menu-popover{position:absolute;inset-inline-end:0;top:45px;width:205px;padding:8px;background:#fff;border:1px solid var(--line);border-radius:17px;box-shadow:0 18px 45px rgba(20,70,57,.18);display:flex;flex-direction:column;z-index:30}
+.order-menu-popover button,.order-menu-popover a{border:0;background:transparent;color:var(--text);font:inherit;font-weight:750;text-align:right;text-decoration:none;padding:10px 11px;border-radius:10px;cursor:pointer}
+.order-menu-popover button:hover,.order-menu-popover a:hover{background:#f7f1e3;color:var(--green)}
+.order-menu-popover .danger{color:#a63c32}.order-menu-popover .danger:hover{background:#fff0ed;color:#8e261d}
+.order-menu-popover .menu-separator{height:1px;background:#eee2c9;margin:5px 3px}
+.table-order-actions{display:flex;align-items:center;gap:8px;justify-content:center}.table-order-actions button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;cursor:pointer;color:var(--green);font-weight:800}
+.order-modal-backdrop{position:fixed;inset:0;z-index:200;background:rgba(10,47,39,.58);backdrop-filter:blur(6px);display:grid;place-items:center;padding:24px}
+.order-management-modal,.order-delete-modal{width:min(760px,100%);max-height:90vh;overflow:auto;background:#fffdf8;border:1px solid #ead7ac;border-radius:28px;box-shadow:0 30px 80px rgba(7,39,32,.32)}
+.order-management-modal>header{display:flex;align-items:flex-start;justify-content:space-between;padding:25px 28px 20px;border-bottom:1px solid #eee0c3}.order-management-modal>header h2{margin:5px 0;color:var(--green);font-size:27px}.order-management-modal>header p{margin:0;color:var(--muted)}.order-management-modal>header>button{width:42px;height:42px;border:1px solid var(--line);border-radius:13px;background:#fff;font-size:24px;cursor:pointer}
+.order-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;padding:24px 28px}.order-modal-grid label{display:flex;flex-direction:column;gap:7px}.order-modal-grid label.wide{grid-column:1/-1}.order-modal-grid label span{font-weight:850;color:var(--green)}.order-modal-grid input,.order-modal-grid select,.order-modal-grid textarea{width:100%;border:1px solid var(--line);border-radius:14px;background:#fff;padding:13px 14px;font:inherit;color:var(--text);outline:none}.order-modal-grid input:focus,.order-modal-grid select:focus,.order-modal-grid textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(20,80,64,.09)}
+.order-management-modal>footer,.order-delete-modal>footer{display:flex;gap:10px;padding:0 28px 26px}.danger-btn{background:#9e352d!important;color:#fff!important;border-color:#9e352d!important}
+.order-delete-modal{width:min(560px,100%);text-align:center;padding:30px}.order-delete-modal .delete-icon{display:grid;place-items:center;width:58px;height:58px;margin:0 auto 14px;border-radius:19px;background:#fff0ed;color:#a63c32;font-size:30px;font-weight:900;border:1px solid #efc5be}.order-delete-modal h2{color:var(--green);margin:0 0 10px}.order-delete-modal p{color:var(--muted);line-height:1.9}.delete-order-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:20px 0}.delete-order-summary span{background:#f7f1e3;border-radius:14px;padding:12px}.delete-order-summary small,.delete-order-summary b{display:block}.delete-order-summary small{color:var(--muted);margin-bottom:4px}.delete-order-summary b{color:var(--green);font-size:18px}.order-delete-modal>footer{justify-content:center;padding:0}
+@media(max-width:650px){.order-modal-backdrop{padding:10px}.order-modal-grid{grid-template-columns:1fr;padding:18px}.order-modal-grid label.wide{grid-column:auto}.order-management-modal>header{padding:20px}.order-management-modal>footer{padding:0 18px 20px}.delete-order-summary{grid-template-columns:1fr}}
