@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getWorkOrderTiming } from '@/lib/work-order-timing';
 
@@ -38,6 +38,9 @@ type ProjectSummary = Project & {
 
 type SortKey = 'name' | 'orders' | 'sites' | 'activity';
 type ViewMode = 'cards' | 'table';
+type ProjectForm = { name: string; code: string; municipality: string; contractor_name: string; status: string; description: string };
+
+const emptyProjectForm: ProjectForm = { name: '', code: '', municipality: '', contractor_name: '', status: 'active', description: '' };
 
 function compactName(name: string) {
   return name
@@ -52,6 +55,7 @@ function statusLabel(status: string | null) {
   if (['active', 'نشط'].includes(value)) return 'نشط';
   if (['completed', 'منتهي'].includes(value)) return 'منتهي';
   if (['paused', 'متوقف'].includes(value)) return 'متوقف';
+  if (['archived', 'مؤرشف'].includes(value)) return 'مؤرشف';
   return status || 'نشط';
 }
 
@@ -67,6 +71,13 @@ export default function ProjectsPage() {
   const [view, setView] = useState<ViewMode>('cards');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null);
+  const [form, setForm] = useState<ProjectForm>(emptyProjectForm);
+  const [saving, setSaving] = useState(false);
+  const [actionProjectId, setActionProjectId] = useState('');
+  const [menuProjectId, setMenuProjectId] = useState('');
 
   useEffect(() => { void loadProjects(); }, []);
 
@@ -85,11 +96,102 @@ export default function ProjectsPage() {
     const firstError = [projectResult.error, siteResult.error, orderResult.error, boqResult.error].find(Boolean);
     if (firstError) setError(firstError.message);
 
-    setProjects((projectResult.data || []) as Project[]);
+    setProjects(((projectResult.data || []) as Project[]).filter((project) => project.status !== 'deleted'));
     setSites((siteResult.data || []) as Site[]);
     setOrders((orderResult.data || []) as WorkOrder[]);
     setBoqItems((boqResult.data || []) as BoqItem[]);
     setLoading(false);
+  }
+
+
+  function openCreateProject() {
+    setEditingProject(null);
+    setForm(emptyProjectForm);
+    setEditorOpen(true);
+    setMessage('');
+  }
+
+  function openEditProject(project: ProjectSummary) {
+    setEditingProject(project);
+    setForm({
+      name: project.name || '',
+      code: project.code || '',
+      municipality: project.municipality || '',
+      contractor_name: project.contractor_name || '',
+      status: project.status || 'active',
+      description: project.description || '',
+    });
+    setEditorOpen(true);
+    setMenuProjectId('');
+    setMessage('');
+  }
+
+  async function saveProject(event: FormEvent) {
+    event.preventDefault();
+    if (!form.name.trim()) { setMessage('اسم المشروع مطلوب.'); return; }
+    setSaving(true);
+    setMessage('');
+    try {
+      const endpoint = editingProject ? `/api/projects/${editingProject.id}` : '/api/projects';
+      const response = await fetch(endpoint, {
+        method: editingProject ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'تعذر حفظ المشروع.');
+      setEditorOpen(false);
+      setMessage(editingProject ? 'تم تحديث بيانات المشروع بنجاح.' : 'تم إنشاء المشروع بنجاح.');
+      await loadProjects();
+    } catch (saveError) {
+      setMessage(saveError instanceof Error ? saveError.message : 'تعذر حفظ المشروع.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function archiveProject(project: ProjectSummary) {
+    const nextStatus = project.status === 'archived' ? 'active' : 'archived';
+    const confirmation = nextStatus === 'archived'
+      ? `هل تريد أرشفة المشروع «${project.name}»؟ ستبقى جميع بياناته محفوظة.`
+      : `هل تريد إعادة المشروع «${project.name}» إلى الحالة النشطة؟`;
+    if (!window.confirm(confirmation)) return;
+    setActionProjectId(project.id);
+    setMessage('');
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'تعذر تحديث حالة المشروع.');
+      setMessage(nextStatus === 'archived' ? 'تمت أرشفة المشروع.' : 'تمت إعادة تنشيط المشروع.');
+      await loadProjects();
+    } catch (actionError) {
+      setMessage(actionError instanceof Error ? actionError.message : 'تعذر تحديث حالة المشروع.');
+    } finally {
+      setActionProjectId('');
+      setMenuProjectId('');
+    }
+  }
+
+  async function trashProject(project: ProjectSummary) {
+    if (!window.confirm(`نقل المشروع «${project.name}» إلى سلة المحذوفات؟ لا يمكن تنفيذ ذلك إذا كان مرتبطًا بمواقع أو بنود أو أوامر عمل.`)) return;
+    setActionProjectId(project.id);
+    setMessage('');
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'تعذر حذف المشروع.');
+      setMessage('تم نقل المشروع إلى سلة المحذوفات.');
+      await loadProjects();
+    } catch (actionError) {
+      setMessage(actionError instanceof Error ? actionError.message : 'تعذر حذف المشروع.');
+    } finally {
+      setActionProjectId('');
+      setMenuProjectId('');
+    }
   }
 
   const summaries = useMemo<ProjectSummary[]>(() => projects.map((project) => {
@@ -140,6 +242,7 @@ export default function ProjectsPage() {
     <main className="page projects-management-page">
       {!isSupabaseConfigured && <div className="notice">لم يتم ربط Supabase بعد.</div>}
       {error && <div className="notice error-notice">تعذر تحميل بعض بيانات المشاريع: {error}</div>}
+      {message && <div className="project-admin-message">{message}<button type="button" onClick={() => setMessage('')}>×</button></div>}
 
       <section className="projects-hero">
         <div>
@@ -148,6 +251,7 @@ export default function ProjectsPage() {
           <p>نقطة الدخول لجميع المواقع وأوامر العمل والبنود، مع متابعة الحالة التشغيلية لكل مشروع.</p>
         </div>
         <div className="projects-hero-actions">
+          <button className="btn project-create-button" type="button" onClick={openCreateProject}>+ مشروع جديد</button>
           <button className="btn" onClick={() => void loadProjects()} disabled={loading}>{loading ? 'جاري التحديث...' : 'تحديث البيانات'}</button>
           <Link href="/import" className="btn primary">استيراد مشروع</Link>
         </div>
@@ -172,6 +276,7 @@ export default function ProjectsPage() {
           <option value="نشط">نشط</option>
           <option value="منتهي">منتهي</option>
           <option value="متوقف">متوقف</option>
+          <option value="مؤرشف">مؤرشف</option>
         </select>
         <select value={timingFilter} onChange={(event) => setTimingFilter(event.target.value)} aria-label="المتابعة الزمنية">
           <option value="all">كل الحالات الزمنية</option>
@@ -203,7 +308,17 @@ export default function ProjectsPage() {
             <article className="project-management-card" key={project.id}>
               <div className="project-card-topline">
                 <span className="project-order-index">{String(index + 1).padStart(2, '0')}</span>
-                <span className={`project-status-chip status-${statusLabel(project.status)}`}>{statusLabel(project.status)}</span>
+                <div className="project-card-admin-tools">
+                  <span className={`project-status-chip status-${statusLabel(project.status)}`}>{statusLabel(project.status)}</span>
+                  <button type="button" className="project-more-button" aria-label="إجراءات المشروع" onClick={() => setMenuProjectId((current) => current === project.id ? '' : project.id)}>⋮</button>
+                  {menuProjectId === project.id ? <div className="project-action-menu">
+                    <button type="button" onClick={() => openEditProject(project)}>تعديل البيانات</button>
+                    <Link href={`/project/${project.id}`}>إدارة المواقع والبنود</Link>
+                    <Link href={`/work-orders?project=${project.id}`}>إدارة أوامر العمل</Link>
+                    <button type="button" onClick={() => void archiveProject(project)} disabled={actionProjectId === project.id}>{project.status === 'archived' ? 'إعادة التنشيط' : 'أرشفة المشروع'}</button>
+                    <button type="button" className="danger" onClick={() => void trashProject(project)} disabled={actionProjectId === project.id}>حذف إلى السلة</button>
+                  </div> : null}
+                </div>
               </div>
               <div className="project-card-copy">
                 <h3 title={project.name}>{compactName(project.name)}</h3>
@@ -253,13 +368,31 @@ export default function ProjectsPage() {
               </td>
               <td><span className={`project-status-chip status-${statusLabel(project.status)}`}>{statusLabel(project.status)}</span></td>
               <td>{project.sitesCount}</td><td>{project.ordersCount}</td><td>{project.activeOrders}</td><td>{project.upcomingOrders}</td><td>{project.itemsCount}</td>
-              <td><Link href={`/project/${project.id}`} className="text-link">فتح ←</Link></td>
+              <td><div className="project-table-actions"><Link href={`/project/${project.id}`} className="text-link">فتح ←</Link><button type="button" onClick={() => openEditProject(project)} title="تعديل المشروع">✎</button></div></td>
             </tr>)}</tbody>
           </table>
         </section>
       )}
 
       {!loading && filtered.length === 0 && <div className="projects-empty-state"><b>لا توجد مشاريع مطابقة</b><span>غيّر عبارة البحث أو الفلاتر المستخدمة.</span><button className="btn" onClick={() => { setQuery(''); setStatusFilter('all'); setTimingFilter('all'); }}>إعادة ضبط الفلاتر</button></div>}
+
+      {editorOpen ? <div className="project-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setEditorOpen(false); }}>
+        <section className="project-editor-modal" role="dialog" aria-modal="true" aria-label={editingProject ? 'تعديل المشروع' : 'إنشاء مشروع جديد'}>
+          <div className="project-editor-head">
+            <div><span className="eyebrow">{editingProject ? 'تعديل البيانات' : 'إضافة مشروع'}</span><h2>{editingProject ? 'تحديث المشروع' : 'مشروع جديد'}</h2><p>أدخل البيانات التعريفية الأساسية. يمكن إضافة المواقع والبنود وأوامر العمل بعد الحفظ.</p></div>
+            <button type="button" onClick={() => setEditorOpen(false)} disabled={saving} aria-label="إغلاق">×</button>
+          </div>
+          <form className="project-editor-form" onSubmit={saveProject}>
+            <label className="wide"><span>اسم المشروع *</span><input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required autoFocus /></label>
+            <label><span>رمز المشروع</span><input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} placeholder="مثال: PRJ-07" /></label>
+            <label><span>الحالة</span><select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="active">نشط</option><option value="paused">متوقف</option><option value="completed">منتهي</option><option value="archived">مؤرشف</option></select></label>
+            <label><span>البلدية</span><input value={form.municipality} onChange={(event) => setForm((current) => ({ ...current, municipality: event.target.value }))} /></label>
+            <label><span>المقاول</span><input value={form.contractor_name} onChange={(event) => setForm((current) => ({ ...current, contractor_name: event.target.value }))} /></label>
+            <label className="wide"><span>الوصف</span><textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={4} /></label>
+            <div className="project-editor-actions"><button type="button" className="btn" onClick={() => setEditorOpen(false)} disabled={saving}>إلغاء</button><button type="submit" className="btn primary" disabled={saving}>{saving ? 'جاري الحفظ...' : editingProject ? 'حفظ التعديلات' : 'إنشاء المشروع'}</button></div>
+          </form>
+        </section>
+      </div> : null}
     </main>
   );
 }
