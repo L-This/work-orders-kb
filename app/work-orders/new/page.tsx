@@ -56,8 +56,10 @@ function compactProjectName(value: string) {
 
 function compactItemName(value: string) {
   const clean = String(value || '').replace(/\s+/g, ' ').trim();
-  const firstSentence = clean.split(/[؛\n]/)[0]?.trim() || clean;
-  return compactText(firstSentence, 66);
+  const firstSentence = clean.split(/[؛\n:.]/)[0]?.trim() || clean;
+  const words = firstSentence.split(' ').filter(Boolean);
+  const shortWords = words.slice(0, 7).join(' ');
+  return compactText(shortWords || firstSentence, 42);
 }
 
 function addDays(dateValue: string, duration: number) {
@@ -132,6 +134,11 @@ export default function NewWorkOrderPage() {
 
   const estimatedValue = useMemo(() => selectedItems.reduce(
     (sum, item) => sum + (Number(item.requestedQuantity) || 0) * item.unitPrice,
+    0,
+  ), [selectedItems]);
+
+  const totalRequestedQuantity = useMemo(() => selectedItems.reduce(
+    (sum, item) => sum + (Number(item.requestedQuantity) || 0),
     0,
   ), [selectedItems]);
 
@@ -527,10 +534,14 @@ export default function NewWorkOrderPage() {
                 <div><small>محجوز لأوامر أخرى</small><strong>{formatQuantity(draftBalance.reserved)}</strong></div>
                 <div className="available"><small>الرصيد الحقيقي المتاح</small><strong>{formatQuantity(draftBalance.available)}</strong></div>
               </div>
-              <div className="item-request-row">
-                <label><span>الكمية المستهدفة في هذا الأمر</span><input type="number" min="0" max={draftBalance.available} step="any" value={draftQuantity} onChange={(event) => setDraftQuantity(event.target.value)} /></label>
-                <div className={draftBalance.after < 0 ? 'after-balance danger' : 'after-balance'}><small>الرصيد بعد الحجز</small><strong>{formatQuantity(draftBalance.after)}</strong></div>
-                <button className="btn primary" type="button" onClick={addItem}>+ إضافة البند</button>
+              <div className="live-reservation-summary">
+                <div><small>الرصيد الحالي</small><strong>{formatQuantity(draftBalance.available)}</strong></div>
+                <div><small>المطلوب</small><strong>{formatQuantity(draftBalance.requested)}</strong></div>
+                <div className={draftBalance.after < 0 ? 'danger' : ''}><small>الرصيد بعد الحجز</small><strong>{formatQuantity(draftBalance.after)}</strong></div>
+              </div>
+              <div className="item-request-row compact">
+                <label><span>الكمية المطلوبة</span><input type="number" min="0" max={draftBalance.available} step="any" value={draftQuantity} onChange={(event) => setDraftQuantity(event.target.value)} /></label>
+                <button className="btn primary add-selected-item-button" type="button" onClick={addItem}>+ إضافة البند</button>
               </div>
             </div>
           ) : <div className="empty compact">اختر بندًا لعرض كمية العقد والمنفذ والمحجوز والرصيد المتاح.</div>}
@@ -539,24 +550,24 @@ export default function NewWorkOrderPage() {
         {selectedItems.length ? (
           <div className="table-wrap create-order-items-table reserved-items-table">
             <table>
-              <thead><tr><th>البند</th><th>الوحدة</th><th>العقد</th><th>المنفذ</th><th>المحجوز سابقًا</th><th>المتاح قبل الأمر</th><th>المستهدف/المحجوز الآن</th><th>المتاح بعد الأمر</th><th></th></tr></thead>
+              <thead><tr><th>رقم</th><th>البند</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>القيمة</th><th>الرصيد بعد الحجز</th><th></th></tr></thead>
               <tbody>{selectedItems.map((item) => {
                 const requested = Number(item.requestedQuantity) || 0;
                 const after = item.availableBefore - requested;
                 return (
                   <tr key={item.boqId}>
-                    <td><b>{item.name}</b><small>{item.itemNo ? `رقم البند: ${item.itemNo}` : ''}</small></td>
+                    <td><b>{item.itemNo || '—'}</b></td>
+                    <td><b>{compactItemName(item.name)}</b><small title={item.name}>{item.name}</small></td>
                     <td>{item.unit || '—'}</td>
-                    <td>{formatQuantity(item.contractQuantity)}</td>
-                    <td>{formatQuantity(item.previousExecuted)}</td>
-                    <td>{formatQuantity(item.previouslyReserved)}</td>
-                    <td><b>{formatQuantity(item.availableBefore)}</b></td>
                     <td><input type="number" min="0" max={item.availableBefore} step="any" value={item.requestedQuantity} onChange={(event) => updateQuantity(item.boqId, event.target.value)} /></td>
+                    <td>{formatMoney(item.unitPrice)}</td>
+                    <td><b>{formatMoney(requested * item.unitPrice)}</b></td>
                     <td className={after < 0 ? 'danger-value' : ''}>{formatQuantity(after)}</td>
                     <td><button className="icon-danger-button" type="button" onClick={() => removeItem(item.boqId)} title="حذف البند">×</button></td>
                   </tr>
                 );
               })}</tbody>
+              <tfoot><tr><td colSpan={3}>الإجمالي</td><td><b>{formatQuantity(totalRequestedQuantity)}</b></td><td>—</td><td><b>{formatMoney(estimatedValue)}</b></td><td colSpan={2}>—</td></tr></tfoot>
             </table>
           </div>
         ) : null}
@@ -566,13 +577,14 @@ export default function NewWorkOrderPage() {
         <div className="section-title"><div><span className="section-kicker">المراجعة النهائية</span><h2>اعتماد إنشاء أمر العمل</h2></div></div>
         <div className="final-review-card">
           <div className="review-order-number"><small>سيتم إنشاء</small><strong>أمر العمل رقم {orderNumber}</strong><span>{selectedProject?.name || 'لم يتم اختيار المشروع'}</span></div>
-          <div className="review-summary-grid">
+          <div className="review-summary-grid seven">
             <div><small>المواقع</small><strong>{selectedSiteIds.length}</strong></div>
-            <div><small>البنود</small><strong>{selectedItems.length}</strong></div>
+            <div><small>عدد البنود</small><strong>{selectedItems.length}</strong></div>
+            <div><small>إجمالي الكميات</small><strong>{formatQuantity(totalRequestedQuantity)}</strong></div>
             <div><small>المدة</small><strong>{duration || 0} يوم</strong></div>
             <div><small>البداية</small><strong>{startDate || '—'}</strong></div>
             <div><small>النهاية</small><strong>{endDate || '—'}</strong></div>
-            <div><small>القيمة التقديرية قبل الضريبة</small><strong>{formatMoney(estimatedValue)}</strong></div>
+            <div><small>القيمة الإجمالية قبل الضريبة</small><strong>{formatMoney(estimatedValue)}</strong></div>
           </div>
           <div className="reservation-explainer"><b>منطق الحجز:</b> الكميات المختارة ستُخصم من الرصيد المتاح وتظهر كمحجوزة لأمر العمل، ولن تُضاف إلى المنفذ الفعلي إلا عند تسجيل التنفيذ لاحقًا.</div>
           {validation ? <div className="inline-validation">{validation}</div> : <div className="inline-validation ready">البيانات مكتملة وجاهزة للاعتماد.</div>}

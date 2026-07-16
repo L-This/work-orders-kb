@@ -996,3 +996,98 @@ body{margin:0;background:var(--shell-bg)}
     grid-template-columns: repeat(2, minmax(0,1fr));
   }
 }
+
+
+/* === CREATE WORK ORDER FINAL BUILDER V29 === */
+.item-selection-builder select option {
+  max-width: 520px;
+}
+
+.live-reservation-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.live-reservation-summary > div {
+  padding: 11px 13px;
+  border-radius: 15px;
+  background: rgba(245, 241, 228, .86);
+  border: 1px solid rgba(195, 154, 73, .22);
+}
+
+.live-reservation-summary small,
+.live-reservation-summary strong {
+  display: block;
+}
+
+.live-reservation-summary small {
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.live-reservation-summary strong {
+  font-size: 20px;
+  color: var(--green-900);
+}
+
+.live-reservation-summary .danger {
+  background: rgba(245, 225, 218, .92);
+}
+
+.item-request-row.compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.add-selected-item-button {
+  min-width: 150px;
+  min-height: 46px;
+}
+
+.reserved-items-table td:nth-child(2) {
+  min-width: 280px;
+  max-width: 430px;
+}
+
+.reserved-items-table td:nth-child(2) small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reserved-items-table tfoot td {
+  background: rgba(244, 235, 207, .78);
+  font-weight: 800;
+}
+
+.review-summary-grid.seven {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .review-summary-grid.seven {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .live-reservation-summary,
+  .review-summary-grid.seven {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .item-request-row.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .add-selected-item-button {
+    width: 100%;
+  }
+}
