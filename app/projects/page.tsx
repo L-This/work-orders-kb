@@ -231,6 +231,16 @@ export default function ProjectsPage() {
       ) : (
         <section className="projects-table-wrap">
           <table className="projects-management-table">
+            <colgroup>
+              <col className="project-col-name" />
+              <col className="project-col-status" />
+              <col className="project-col-number" />
+              <col className="project-col-number" />
+              <col className="project-col-number" />
+              <col className="project-col-number" />
+              <col className="project-col-number" />
+              <col className="project-col-action" />
+            </colgroup>
             <thead><tr><th>المشروع</th><th>الحالة</th><th>المواقع</th><th>الأوامر</th><th>الجارية</th><th>القادمة</th><th>البنود</th><th></th></tr></thead>
             <tbody>{filtered.map((project) => <tr key={project.id}>
               <td className="project-table-name-cell">

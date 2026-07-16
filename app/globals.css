@@ -596,3 +596,83 @@ body{margin:0;background:var(--shell-bg)}
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+
+/* === PROJECT TABLE COLUMN BALANCE V23 === */
+.projects-management-table {
+  min-width: 920px;
+  table-layout: fixed;
+}
+
+.projects-management-table col.project-col-name {
+  width: auto;
+}
+
+.projects-management-table col.project-col-status {
+  width: 86px;
+}
+
+.projects-management-table col.project-col-number {
+  width: 68px;
+}
+
+.projects-management-table col.project-col-action {
+  width: 76px;
+}
+
+.projects-management-table th,
+.projects-management-table td {
+  padding-inline: 8px;
+}
+
+.projects-management-table .project-table-name-cell {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  padding-inline: 16px;
+}
+
+.project-table-name-link b {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.5;
+  min-height: 3em;
+  max-height: 3em;
+}
+
+.projects-management-table .project-table-name-cell small {
+  margin-top: 3px;
+  font-size: 9px;
+  opacity: .86;
+}
+
+.projects-management-table th:nth-child(n+2),
+.projects-management-table td:nth-child(n+2) {
+  white-space: nowrap;
+}
+
+.projects-management-table td:last-child .text-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  font-weight: 800;
+}
+
+@media (max-width: 1100px) {
+  .projects-management-table {
+    min-width: 860px;
+  }
+
+  .projects-management-table col.project-col-status {
+    width: 78px;
+  }
+
+  .projects-management-table col.project-col-number {
+    width: 62px;
+  }
+
+  .projects-management-table col.project-col-action {
+    width: 68px;
+  }
+}
