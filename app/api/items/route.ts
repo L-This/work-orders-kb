@@ -23,7 +23,7 @@ export async function GET() {
       work.from('project_boq_items').select('id,item_id,project_id,boq_item_no,unit,contract_quantity,unit_price,total_price'),
       work.from('work_order_items').select('id,item_id,work_order_id,quantity,executed_quantity,remaining_quantity,total_price'),
       work.from('projects').select('id,name'),
-      work.from('work_orders').select('id,project_id,work_order_number,status'),
+      work.from('work_orders').select('id,project_id,work_order_number,status,title,work_order_date,work_order_end_date'),
     ]);
 
     const error = items.error || boq.error || lines.error || projects.error || orders.error;

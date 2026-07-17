@@ -7,7 +7,7 @@ type Item = { id: string; name: string; normalized_name?: string | null; unit?: 
 type BoqRow = { id: string; item_id: string; project_id: string; boq_item_no?: string | null; unit?: string | null; contract_quantity?: number | null; unit_price?: number | null; total_price?: number | null };
 type WorkLine = { id: string; item_id: string; work_order_id: string; quantity?: number | null; executed_quantity?: number | null; remaining_quantity?: number | null; total_price?: number | null };
 type Project = { id: string; name: string };
-type WorkOrder = { id: string; project_id: string; work_order_number?: string | null; status?: string | null };
+type WorkOrder = { id: string; project_id: string; work_order_number?: string | null; status?: string | null; title?: string | null; work_order_date?: string | null; work_order_end_date?: string | null };
 type ItemStats = Item & {
   boqCount: number;
   projectCount: number;
@@ -19,6 +19,8 @@ type ItemStats = Item & {
   contractValue: number;
   executionValue: number;
   projects: Project[];
+  boqRows: BoqRow[];
+  workLines: WorkLine[];
 };
 
 type EditorState = { mode: 'create' | 'edit'; item?: ItemStats } | null;
@@ -103,6 +105,8 @@ export default function Page() {
         contractValue: itemBoq.reduce((sum, row) => sum + number(row.total_price), 0),
         executionValue: itemLines.reduce((sum, row) => sum + number(row.total_price), 0),
         projects: Array.from(projectIds).map((id) => projectMap.get(id)).filter(Boolean) as Project[],
+        boqRows: itemBoq,
+        workLines: itemLines,
       };
     });
   }, [items, boq, lines, projects, orders]);
@@ -203,7 +207,7 @@ export default function Page() {
                 <button className="danger" onClick={() => { setDeleteItem(item); setOpenMenu(''); }}><Icon name="trash"/>حذف البند</button>
               </div> : null}
             </div>
-            <h3 title={item.name}>{item.name}</h3>
+            <div className="item-title-wrap"><h3 title={item.name}>{item.name}</h3></div><div className="item-card-divider" />
             <div className="item-unit-chip">{item.unit || 'بدون وحدة'}</div>
             <div className="item-metrics">
               <div><small>المشاريع</small><strong>{item.projectCount}</strong></div>
@@ -216,14 +220,14 @@ export default function Page() {
               <div><small>متبقٍ</small><strong>{formatNumber(item.remainingQuantity)}</strong></div>
             </div>
             <div className="item-card-footer"><span>القيمة العقدية</span><strong>{formatNumber(item.contractValue)}</strong></div>
-            <button className="item-open-button" type="button" onClick={() => setDetails(item)}>فتح تفاصيل البند</button>
+            <button className="item-open-button" type="button" onClick={() => setDetails(item)}><Icon name="chart"/><span>فتح تفاصيل البند</span></button>
           </article>)}
         </div>
       ) : <div className="module-empty"><strong>لا توجد بنود مطابقة</strong><span>غيّر البحث أو الفلاتر، أو أضف بندًا جديدًا.</span></div>}
     </section>
 
     {typeof document !== 'undefined' && editor ? createPortal(<ItemEditor state={editor} busy={busy} onClose={() => setEditor(null)} onSaved={async (text) => { setMessage(text); setEditor(null); await load(); }} setBusy={setBusy} />, document.body) : null}
-    {typeof document !== 'undefined' && details ? createPortal(<ItemDetails item={details} onClose={() => setDetails(null)} />, document.body) : null}
+    {typeof document !== 'undefined' && details ? createPortal(<ItemDetails item={details} projects={projects} orders={orders} onClose={() => setDetails(null)} onEdit={() => { setDetails(null); setEditor({ mode: 'edit', item: details }); }} />, document.body) : null}
     {typeof document !== 'undefined' && deleteItem ? createPortal(<div className="items-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeleteItem(null); }}><section className="items-modal compact"><button className="items-modal-close" onClick={() => setDeleteItem(null)}>×</button><span className="eyebrow">حذف بند</span><h2>{deleteItem.name}</h2><p>هذا البند مرتبط بـ {deleteItem.projectCount} مشروع و{deleteItem.orderCount} أمر عمل.</p>{deleteItem.projectCount || deleteItem.orderCount ? <div className="items-warning">لن يسمح النظام بحذفه حفاظًا على السجل، ويمكن تعطيله بدلًا من ذلك.</div> : null}<div className="items-modal-actions"><button className="danger-button" onClick={() => void removeItem()} disabled={busy}>{busy ? 'جاري الحذف...' : 'حذف البند'}</button><button onClick={() => setDeleteItem(null)}>إلغاء</button></div></section></div>, document.body) : null}
   </div>;
 }
@@ -246,9 +250,67 @@ function ItemEditor({ state, busy, onClose, onSaved, setBusy }: { state: NonNull
     else await onSaved(state.mode === 'create' ? 'تم إنشاء البند بنجاح.' : 'تم تحديث البند بنجاح.');
     setBusy(false);
   }
-  return <div className="items-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="items-modal"><button className="items-modal-close" onClick={onClose}>×</button><span className="eyebrow">{state.mode === 'create' ? 'إضافة بند' : 'تعديل بند'}</span><h2>{state.mode === 'create' ? 'بند جديد' : 'تعديل بيانات البند'}</h2><p>سجّل الاسم والوحدة والفئة ليصبح البند متاحًا ضمن جداول الكميات وأوامر العمل.</p>{error ? <div className="items-warning">{error}</div> : null}<div className="items-form-grid"><label className="full"><span>اسم البند *</span><textarea value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label><span>الوحدة</span><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder="مثال: عدد، م²، م.ط" /></label><label><span>الفئة</span><input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="مثال: ري، زراعة، كهرباء" /></label><label className="full status-toggle"><input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} /><span>البند نشط ومتاح للاستخدام</span></label></div><div className="items-modal-actions"><button className="primary-action" onClick={() => void save()} disabled={busy}>{busy ? 'جاري الحفظ...' : state.mode === 'create' ? 'إنشاء البند' : 'حفظ التعديلات'}</button><button onClick={onClose}>إلغاء</button></div></section></div>;
+  return <div className="items-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="items-modal"><button className="items-modal-close" onClick={onClose}>×</button><div className="items-modal-title-row"><span className="items-modal-title-icon"><Icon name="layers"/></span><div><span className="eyebrow">{state.mode === 'create' ? 'إضافة بند' : 'تعديل بند'}</span><h2>{state.mode === 'create' ? 'بند جديد' : 'تعديل بيانات البند'}</h2></div></div><p>سجّل الاسم والوحدة والفئة ليصبح البند متاحًا ضمن جداول الكميات وأوامر العمل.</p>{error ? <div className="items-warning">{error}</div> : null}<div className="items-form-grid"><label className="full"><span>اسم البند *</span><textarea value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label><span>الوحدة</span><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder="مثال: عدد، م²، م.ط" /></label><label><span>الفئة</span><input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="مثال: ري، زراعة، كهرباء" /></label><div className="items-form-hint full">استخدم وحدة وفئة موحدتين لتسهيل البحث والتقارير والمقارنة بين المشاريع.</div><label className="full status-toggle"><input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} /><span>البند نشط ومتاح للاستخدام</span></label></div><div className="items-modal-actions"><button className="primary-action" onClick={() => void save()} disabled={busy}>{busy ? 'جاري الحفظ...' : state.mode === 'create' ? 'إنشاء البند' : 'حفظ التعديلات'}</button><button onClick={onClose}>إلغاء</button></div></section></div>;
 }
 
-function ItemDetails({ item, onClose }: { item: ItemStats; onClose: () => void }) {
-  return <div className="items-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="items-modal details"><button className="items-modal-close" onClick={onClose}>×</button><span className="eyebrow">تفاصيل البند</span><h2>{item.name}</h2><div className="item-detail-summary"><div><small>الوحدة</small><strong>{item.unit || 'غير مسجلة'}</strong></div><div><small>الفئة</small><strong>{item.category || 'غير مصنف'}</strong></div><div><small>المشاريع</small><strong>{item.projectCount}</strong></div><div><small>أوامر العمل</small><strong>{item.orderCount}</strong></div></div><div className="item-detail-quantities"><div><small>الكمية التعاقدية</small><strong>{formatNumber(item.contractQuantity)}</strong></div><div><small>المحجوز</small><strong>{formatNumber(item.reservedQuantity)}</strong></div><div><small>المنفذ</small><strong>{formatNumber(item.executedQuantity)}</strong></div><div><small>المتبقي</small><strong>{formatNumber(item.remainingQuantity)}</strong></div><div><small>القيمة العقدية</small><strong>{formatNumber(item.contractValue)}</strong></div><div><small>قيمة أوامر العمل</small><strong>{formatNumber(item.executionValue)}</strong></div></div><div className="item-project-list"><h3>المشاريع المرتبطة</h3>{item.projects.length ? item.projects.map((project) => <a key={project.id} href={`/project/${project.id}`}>{project.name}</a>) : <span>لا توجد مشاريع مرتبطة بهذا البند.</span>}</div><div className="items-modal-actions"><button onClick={onClose}>إغلاق</button></div></section></div>;
+function ItemDetails({ item, projects, orders, onClose, onEdit }: { item: ItemStats; projects: Project[]; orders: WorkOrder[]; onClose: () => void; onEdit: () => void }) {
+  const projectMap = new Map(projects.map((project) => [project.id, project]));
+  const orderMap = new Map(orders.map((order) => [order.id, order]));
+  const usageRows = item.workLines.map((line) => {
+    const order = orderMap.get(line.work_order_id);
+    const project = order ? projectMap.get(order.project_id) : undefined;
+    const quantity = number(line.quantity);
+    const executed = number(line.executed_quantity);
+    const remaining = number(line.remaining_quantity);
+    return { line, order, project, quantity, executed, remaining, value: number(line.total_price) };
+  });
+  const executionPercent = item.contractQuantity > 0 ? Math.min(100, Math.max(0, (item.executedQuantity / item.contractQuantity) * 100)) : 0;
+  const latest = [...usageRows].sort((a, b) => String(b.order?.work_order_date || '').localeCompare(String(a.order?.work_order_date || '')))[0];
+
+  return <div className="items-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="items-modal details usage-dashboard">
+      <button className="items-modal-close" onClick={onClose}>×</button>
+      <div className="usage-header">
+        <div className="items-modal-title-row"><span className="items-modal-title-icon"><Icon name="chart"/></span><div><span className="eyebrow">تفاصيل استخدام البند</span><h2>{item.name}</h2><p>{item.category || 'غير مصنف'} · {item.unit || 'بدون وحدة'}</p></div></div>
+      </div>
+
+      <div className="usage-kpi-grid">
+        <div><small>المشاريع</small><strong>{item.projectCount}</strong></div>
+        <div><small>أوامر العمل</small><strong>{item.orderCount}</strong></div>
+        <div><small>التعاقدي</small><strong>{formatNumber(item.contractQuantity)}</strong></div>
+        <div><small>المنفذ</small><strong>{formatNumber(item.executedQuantity)}</strong></div>
+        <div><small>المتبقي</small><strong>{formatNumber(item.remainingQuantity)}</strong></div>
+        <div><small>القيمة العقدية</small><strong>{formatNumber(item.contractValue)}</strong></div>
+      </div>
+
+      <section className="usage-progress-card">
+        <div className="usage-progress-head"><div><span>نسبة التنفيذ</span><strong>{formatNumber(executionPercent)}%</strong></div><small>{formatNumber(item.executedQuantity)} من {formatNumber(item.contractQuantity)} {item.unit || ''}</small></div>
+        <div className="usage-progress-track"><span style={{ width: `${executionPercent}%` }} /></div>
+      </section>
+
+      <section className="usage-section">
+        <div className="usage-section-head"><div><span className="eyebrow">تفاصيل الربط</span><h3>المشاريع وأوامر العمل المستخدمة</h3></div><span>{usageRows.length} سجل</span></div>
+        {usageRows.length ? <div className="usage-card-list">{usageRows.map(({ line, order, project, quantity, executed, remaining, value }) => <article className="usage-row-card" key={line.id}>
+          <div className="usage-row-main"><strong>{project?.name || 'مشروع غير معروف'}</strong><span>أمر عمل {order?.work_order_number || '—'} {order?.title ? `· ${order.title}` : ''}</span></div>
+          <div><small>التعاقدي/المحجوز</small><strong>{formatNumber(quantity)}</strong></div>
+          <div><small>المنفذ</small><strong>{formatNumber(executed)}</strong></div>
+          <div><small>المتبقي</small><strong>{formatNumber(remaining)}</strong></div>
+          <div><small>القيمة</small><strong>{formatNumber(value)}</strong></div>
+          <div className="usage-row-actions">{order ? <a href={`/work-order/${order.id}`}>فتح أمر العمل</a> : null}{project ? <a href={`/project/${project.id}`}>فتح المشروع</a> : null}</div>
+        </article>)}</div> : <div className="module-empty"><strong>لا توجد سجلات استخدام</strong><span>البند موجود في القاموس لكنه لم يدخل في أمر عمل حتى الآن.</span></div>}
+      </section>
+
+      <section className="usage-totals">
+        <div><small>إجمالي التعاقدي</small><strong>{formatNumber(item.contractQuantity)}</strong></div>
+        <div><small>إجمالي المحجوز</small><strong>{formatNumber(item.reservedQuantity)}</strong></div>
+        <div><small>إجمالي المنفذ</small><strong>{formatNumber(item.executedQuantity)}</strong></div>
+        <div><small>إجمالي المتبقي</small><strong>{formatNumber(item.remainingQuantity)}</strong></div>
+        <div><small>قيمة أوامر العمل</small><strong>{formatNumber(item.executionValue)}</strong></div>
+      </section>
+
+      {latest ? <section className="usage-timeline"><span className="usage-timeline-dot"/><div><small>آخر استخدام مسجل</small><strong>{latest.order?.work_order_date || 'بدون تاريخ'}</strong><p>أمر عمل {latest.order?.work_order_number || '—'} · {latest.project?.name || 'مشروع غير معروف'}</p></div></section> : null}
+
+      <div className="items-modal-actions usage-actions"><button className="primary-action" onClick={onEdit}>تعديل البند</button>{latest?.order ? <a href={`/work-order/${latest.order.id}`}>فتح آخر أمر عمل</a> : null}{latest?.project ? <a href={`/project/${latest.project.id}`}>فتح المشروع</a> : null}<button onClick={onClose}>إغلاق</button></div>
+    </section>
+  </div>;
 }
