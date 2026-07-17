@@ -25,6 +25,8 @@ export default function ImportPage() {
   const [dragging, setDragging] = useState(false);
   const [orderQuery, setOrderQuery] = useState('');
   const [showAllOrders, setShowAllOrders] = useState(false);
+  const [showAllBoq, setShowAllBoq] = useState(false);
+  const [confirmImport, setConfirmImport] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const metrics = useMemo(() => {
@@ -46,7 +48,10 @@ export default function ImportPage() {
       { label: 'أوامر العمل', ready: data.workOrders.length > 0 },
       { label: 'المواقع المرتبطة', ready: data.sites.length > 0 },
     ];
-    return { checks, ready: checks.every(check => check.ready), percent: Math.round((checks.filter(check => check.ready).length / checks.length) * 100) };
+    const structurallyReady = checks.every(check => check.ready);
+    const basePercent = Math.round((checks.filter(check => check.ready).length / checks.length) * 100);
+    const warningPenalty = Math.min(20, data.warnings.length * 10);
+    return { checks, ready: structurallyReady, hasWarnings: data.warnings.length > 0, percent: Math.max(0, basePercent - warningPenalty) };
   }, [data]);
 
   const filteredOrders = useMemo(() => {
@@ -59,13 +64,13 @@ export default function ImportPage() {
   const visibleOrders = showAllOrders ? filteredOrders : filteredOrders.slice(0, 6);
 
   function resetImport() {
-    setFileName(''); setData(null); setStatus(''); setError(''); setProgress(null); setImported(false); setOrderQuery(''); setShowAllOrders(false);
+    setFileName(''); setData(null); setStatus(''); setError(''); setProgress(null); setImported(false); setOrderQuery(''); setShowAllOrders(false); setShowAllBoq(false); setConfirmImport(false);
     if (fileInput.current) fileInput.current.value = '';
   }
 
   async function parseFile(file: File) {
     if (!/\.(xlsx|xls)$/i.test(file.name)) { setError('صيغة الملف غير مدعومة. اختر ملف XLSX أو XLS.'); return; }
-    setFileName(file.name); setData(null); setImported(false); setError(''); setShowAllOrders(false); setOrderQuery('');
+    setFileName(file.name); setData(null); setImported(false); setError(''); setShowAllOrders(false); setShowAllBoq(false); setConfirmImport(false); setOrderQuery('');
     setStatus('جاري تحليل الملف واكتشاف بنية أوامر العمل...');
     try {
       const parsed = parseWorkOrdersMatrixWorkbook(await file.arrayBuffer());
@@ -129,6 +134,7 @@ export default function ImportPage() {
 
   async function importWorkbook() {
     if (!data) return;
+    setConfirmImport(false);
     if (!isSupabaseConfigured) {
       setError('لم يتم ربط Supabase بالموقع.');
       return;
@@ -381,7 +387,7 @@ export default function ImportPage() {
             </div>
           </section>
 
-          {readiness && <section className={`import-readiness ${readiness.ready ? 'ready' : 'needs-review'}`}><div className="readiness-score"><strong>{readiness.percent}%</strong><span>جاهزية الملف</span></div><div><span className="section-kicker">فحص تلقائي قبل الاستيراد</span><h2>{readiness.ready ? 'الملف جاهز للمراجعة والاعتماد' : 'الملف يحتاج إلى مراجعة'}</h2><div className="readiness-checks">{readiness.checks.map(check=><span className={check.ready?'ok':'missing'} key={check.label}><i>{check.ready?'✓':'!'}</i>{check.label}</span>)}</div></div></section>}
+          {readiness && <section className={`import-readiness ${readiness.ready ? readiness.hasWarnings ? 'with-warnings' : 'ready' : 'needs-review'}`}><div className="readiness-score"><strong>{readiness.percent}%</strong><span>جاهزية الملف</span></div><div><span className="section-kicker">فحص تلقائي قبل الاستيراد</span><h2>{!readiness.ready ? 'الملف يحتاج إلى مراجعة' : readiness.hasWarnings ? 'الملف جاهز مع وجود ملاحظات' : 'الملف جاهز للمراجعة والاعتماد'}</h2>{readiness.hasWarnings&&readiness.ready?<p className="readiness-warning-text">يمكن متابعة الاستيراد، لكن راجع الملاحظات المسجلة قبل الاعتماد.</p>:null}<div className="readiness-checks">{readiness.checks.map(check=><span className={check.ready?'ok':'missing'} key={check.label}><i>{check.ready?'✓':'!'}</i>{check.label}</span>)}</div></div></section>}
 
           <section className="stats import-metrics">
             <div className="stat"><small>بنود جدول الكميات</small><strong>{metrics.boqItems}</strong><span>البنود الأصلية للعقد</span></div>
@@ -451,11 +457,12 @@ export default function ImportPage() {
             <div className="table-wrap">
               <table>
                 <thead><tr><th>رقم البند</th><th>الوصف</th><th>الوحدة</th><th>كمية العقد</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
-                <tbody>{data.boqItems.slice(0, 18).map(item => (
+                <tbody>{(showAllBoq ? data.boqItems : data.boqItems.slice(0, 8)).map(item => (
                   <tr key={`${item.itemNo}-${item.rowNumber}`}><td>{item.itemNo}</td><td><b>{item.itemName}</b></td><td>{item.unit}</td><td>{item.contractQuantity.toLocaleString('ar-SA')}</td><td>{item.unitPrice.toLocaleString('ar-SA')}</td><td>{item.totalPrice.toLocaleString('ar-SA')}</td></tr>
                 ))}</tbody>
               </table>
             </div>
+            {data.boqItems.length>8?<button type="button" className="import-show-more" onClick={()=>setShowAllBoq(value=>!value)}>{showAllBoq?'عرض أول 8 بنود':`عرض جميع البنود (${data.boqItems.length})`}</button>:null}
           </section>
 
           <section className="panel import-approval">
@@ -464,12 +471,13 @@ export default function ImportPage() {
               <h2>استيراد البيانات إلى Supabase</h2>
               <p>الاستيراد آمن عند تكراره: يتم تحديث المشروع والعقد والبنود وأوامر العمل الموجودة بدل إنشاء نسخ مكررة.</p>
             </div>
-            <button className="btn primary import-button" onClick={importWorkbook} disabled={Boolean(progress) || imported || !readiness?.ready}>
+            <button className="btn primary import-button" onClick={()=>setConfirmImport(true)} disabled={Boolean(progress) || imported || !readiness?.ready}>
               {progress ? `${progress.step} (${progress.current}/${progress.total})` : imported ? 'تم الاعتماد بنجاح' : 'اعتماد واستيراد المشروع'}
             </button>
             {progress && <div className="progress-track"><span style={{ width: `${progress.total ? (progress.current / progress.total) * 100 : 0}%` }} /></div>}
             {imported && <div className="import-success-actions"><Link className="btn primary" href="/">فتح مركز المعرفة</Link><Link className="btn" href="/projects">فتح المشروع</Link></div>}
           </section>
+          {confirmImport && data && metrics ? <div className="import-confirm-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setConfirmImport(false)}}><section className="import-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="import-confirm-title"><button className="import-confirm-close" type="button" onClick={()=>setConfirmImport(false)} aria-label="إغلاق">×</button><span className="section-kicker">الاعتماد النهائي</span><h2 id="import-confirm-title">تأكيد استيراد المشروع</h2><p>راجع الملخص للمرة الأخيرة. بعد التأكيد سيبدأ تحديث البيانات وكتابتها في قاعدة النظام.</p><div className="confirm-project-name"><small>المشروع</small><strong>{data.project.name}</strong><span>{fileName}</span></div><div className="confirm-import-grid"><div><strong>{metrics.boqItems}</strong><span>بند عقد</span></div><div><strong>{metrics.workOrders}</strong><span>أمر عمل</span></div><div><strong>{metrics.sites}</strong><span>موقع</span></div><div><strong>{metrics.orderLines}</strong><span>سطر تنفيذ</span></div></div>{data.warnings.length?<div className="confirm-warning"><strong>تنبيه قبل المتابعة</strong><span>يوجد {data.warnings.length} ملاحظات في الملف. سيتم الاستيراد مع الاحتفاظ بالبيانات المتاحة.</span></div>:<div className="confirm-safe">✓ لم يكتشف الفحص ملاحظات تمنع الاعتماد.</div>}<div className="confirm-dedup-note">البيانات الموجودة مسبقًا سيتم تحديثها، ولن ينشئ النظام نسخًا مكررة.</div><div className="confirm-actions"><button type="button" onClick={()=>setConfirmImport(false)}>العودة للمراجعة</button><button type="button" className="confirm-primary" onClick={importWorkbook}>تأكيد وبدء الاستيراد</button></div></section></div>:null}
         </>
       )}
     </main>
