@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { normalizeArabic } from '@/lib/helpers';
 import { parseWorkOrdersMatrixWorkbook, SmartWorkbook } from '@/lib/excel-import';
@@ -22,6 +22,10 @@ export default function ImportPage() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [imported, setImported] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [orderQuery, setOrderQuery] = useState('');
+  const [showAllOrders, setShowAllOrders] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const metrics = useMemo(() => {
     if (!data) return null;
@@ -34,22 +38,45 @@ export default function ImportPage() {
     };
   }, [data]);
 
-  async function onFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
-    setData(null);
-    setImported(false);
-    setError('');
+  const readiness = useMemo(() => {
+    if (!data) return null;
+    const checks = [
+      { label: 'اسم المشروع', ready: Boolean(data.project.name?.trim()) },
+      { label: 'جدول الكميات', ready: data.boqItems.length > 0 },
+      { label: 'أوامر العمل', ready: data.workOrders.length > 0 },
+      { label: 'المواقع المرتبطة', ready: data.sites.length > 0 },
+    ];
+    return { checks, ready: checks.every(check => check.ready), percent: Math.round((checks.filter(check => check.ready).length / checks.length) * 100) };
+  }, [data]);
+
+  const filteredOrders = useMemo(() => {
+    if (!data) return [];
+    const needle = normalizeArabic(orderQuery.trim());
+    if (!needle) return data.workOrders;
+    return data.workOrders.filter(order => normalizeArabic([order.number, ...order.sites, ...order.items.map(item => item.itemName)].join(' ')).includes(needle));
+  }, [data, orderQuery]);
+
+  const visibleOrders = showAllOrders ? filteredOrders : filteredOrders.slice(0, 6);
+
+  function resetImport() {
+    setFileName(''); setData(null); setStatus(''); setError(''); setProgress(null); setImported(false); setOrderQuery(''); setShowAllOrders(false);
+    if (fileInput.current) fileInput.current.value = '';
+  }
+
+  async function parseFile(file: File) {
+    if (!/\.(xlsx|xls)$/i.test(file.name)) { setError('صيغة الملف غير مدعومة. اختر ملف XLSX أو XLS.'); return; }
+    setFileName(file.name); setData(null); setImported(false); setError(''); setShowAllOrders(false); setOrderQuery('');
     setStatus('جاري تحليل الملف واكتشاف بنية أوامر العمل...');
     try {
       const parsed = parseWorkOrdersMatrixWorkbook(await file.arrayBuffer());
-      setData(parsed);
-      setStatus('اكتمل التحليل. راجع الملخص وأوامر العمل قبل اعتماد الاستيراد.');
-    } catch (e: any) {
-      setError(e?.message || 'تعذر تحليل ملف Excel.');
-      setStatus('');
-    }
+      setData(parsed); setStatus('اكتمل التحليل. راجع نتيجة فحص الملف قبل اعتماد الاستيراد.');
+    } catch (e: any) { setError(e?.message || 'تعذر تحليل ملف Excel.'); setStatus(''); }
+  }
+
+  async function onFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await parseFile(file);
   }
 
   async function ensureProject(parsed: SmartWorkbook) {
@@ -315,12 +342,8 @@ export default function ImportPage() {
   }
 
   return (
-    <main className="page import-page">
-      <div className="page-heading">
-        <span className="section-kicker">إدارة المشاريع</span>
-        <h1>استيراد مشروع من Excel</h1>
-        <p>يقرأ النظام قوالب جداول الكميات متعددة المشاريع، ويكتشف مواقع أعمدة أوامر العمل تلقائيًا، ثم يعرض مراجعة كاملة قبل الكتابة في القاعدة.</p>
-      </div>
+    <main className="page import-page import-center-page">
+      <section className="import-hero-pro"><div><span className="section-kicker">مركز إدخال البيانات</span><h1>استيراد Excel الذكي</h1><p>ارفع ملف المشروع، وسيكتشف النظام المشروع وجدول الكميات والمواقع وأوامر العمل تلقائيًا قبل كتابة أي معلومة في القاعدة.</p></div><div className="import-hero-shield"><span>✓</span><strong>مراجعة قبل الحفظ</strong><small>لن تُكتب البيانات قبل اعتمادك النهائي</small></div></section>
 
       <div className="steps import-steps">
         <span className={`step ${fileName ? 'active' : ''}`}>1 رفع الملف</span>
@@ -329,13 +352,14 @@ export default function ImportPage() {
         <span className={`step ${imported ? 'active' : ''}`}>4 الاعتماد</span>
       </div>
 
-      <section className="drop import-drop">
-        <input id="excel-file" type="file" accept=".xlsx,.xls" onChange={onFile} />
+      <section className={`drop import-drop import-drop-pro ${dragging ? 'is-dragging' : ''} ${fileName ? 'has-file' : ''}`} onDragEnter={event=>{event.preventDefault();setDragging(true)}} onDragOver={event=>event.preventDefault()} onDragLeave={event=>{event.preventDefault();setDragging(false)}} onDrop={event=>{event.preventDefault();setDragging(false);const file=event.dataTransfer.files?.[0];if(file)void parseFile(file)}}>
+        <input ref={fileInput} id="excel-file" type="file" accept=".xlsx,.xls" onChange={onFile} />
         <label htmlFor="excel-file">
-          <span className="upload-icon">XL</span>
-          <strong>{fileName || 'اختر ملف أي مشروع من جداول الكميات وأوامر العمل'}</strong>
-          <small>الملفات المدعومة: XLSX و XLS — تتم القراءة داخل المتصفح ولا يُحفظ الملف قبل الاعتماد.</small>
+          <span className="upload-icon">{fileName ? '✓' : 'XL'}</span>
+          <strong>{fileName || 'اسحب ملف Excel هنا أو اضغط للاختيار'}</strong>
+          <small>{fileName ? 'تم اختيار الملف وتحليله محليًا — يمكنك استبداله بملف آخر' : 'XLSX أو XLS · لا يتم الحفظ في القاعدة قبل الاعتماد'}</small>
         </label>
+        {fileName ? <button type="button" className="import-reset" onClick={event=>{event.stopPropagation();resetImport()}}>إزالة الملف والبدء من جديد</button> : null}
       </section>
 
       {status && <div className="notice import-notice">{status}</div>}
@@ -357,6 +381,8 @@ export default function ImportPage() {
             </div>
           </section>
 
+          {readiness && <section className={`import-readiness ${readiness.ready ? 'ready' : 'needs-review'}`}><div className="readiness-score"><strong>{readiness.percent}%</strong><span>جاهزية الملف</span></div><div><span className="section-kicker">فحص تلقائي قبل الاستيراد</span><h2>{readiness.ready ? 'الملف جاهز للمراجعة والاعتماد' : 'الملف يحتاج إلى مراجعة'}</h2><div className="readiness-checks">{readiness.checks.map(check=><span className={check.ready?'ok':'missing'} key={check.label}><i>{check.ready?'✓':'!'}</i>{check.label}</span>)}</div></div></section>}
+
           <section className="stats import-metrics">
             <div className="stat"><small>بنود جدول الكميات</small><strong>{metrics.boqItems}</strong><span>البنود الأصلية للعقد</span></div>
             <div className="stat"><small>أوامر العمل المكتشفة</small><strong>{metrics.workOrders}</strong><span>أوامر تحتوي بيانات فعلية</span></div>
@@ -374,10 +400,11 @@ export default function ImportPage() {
           <section className="panel">
             <div className="section-title">
               <div><span className="section-kicker">المراجعة</span><h2>أوامر العمل والمواقع</h2></div>
-              <span>{data.workOrders.length} أوامر</span>
+              <span>{filteredOrders.length} من {data.workOrders.length} أوامر</span>
             </div>
+            <div className="import-order-toolbar"><input value={orderQuery} onChange={event=>{setOrderQuery(event.target.value);setShowAllOrders(false)}} placeholder="ابحث برقم الأمر أو الموقع أو اسم البند..." />{orderQuery?<button type="button" onClick={()=>setOrderQuery('')}>مسح</button>:null}</div>
             <div className="import-orders-grid">
-              {data.workOrders.map(order => {
+              {visibleOrders.map(order => {
                 const timing = getWorkOrderTiming(order.startDate, order.endDate);
                 return (
                 <article className="import-order-card" key={order.number}>
@@ -412,6 +439,8 @@ export default function ImportPage() {
                 );
               })}
             </div>
+            {!visibleOrders.length?<div className="import-no-orders">لا توجد أوامر عمل مطابقة لعبارة البحث.</div>:null}
+            {filteredOrders.length>6?<button type="button" className="import-show-more" onClick={()=>setShowAllOrders(value=>!value)}>{showAllOrders?'عرض أول 6 أوامر':`عرض جميع الأوامر (${filteredOrders.length})`}</button>:null}
           </section>
 
           <section className="panel">
@@ -435,7 +464,7 @@ export default function ImportPage() {
               <h2>استيراد البيانات إلى Supabase</h2>
               <p>الاستيراد آمن عند تكراره: يتم تحديث المشروع والعقد والبنود وأوامر العمل الموجودة بدل إنشاء نسخ مكررة.</p>
             </div>
-            <button className="btn primary import-button" onClick={importWorkbook} disabled={Boolean(progress) || imported}>
+            <button className="btn primary import-button" onClick={importWorkbook} disabled={Boolean(progress) || imported || !readiness?.ready}>
               {progress ? `${progress.step} (${progress.current}/${progress.total})` : imported ? 'تم الاعتماد بنجاح' : 'اعتماد واستيراد المشروع'}
             </button>
             {progress && <div className="progress-track"><span style={{ width: `${progress.total ? (progress.current / progress.total) * 100 : 0}%` }} /></div>}
