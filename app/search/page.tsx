@@ -1,151 +1,49 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-type SearchData = {
-  query: string;
-  total: number;
-  projects: Array<{ id:string; name:string; code:string|null; municipality:string|null; contractor_name:string|null; status:string|null; sitesCount:number; ordersCount:number; itemsCount:number }>;
-  workOrders: Array<{ id:string; project_id:string; work_order_number:string; title:string|null; status:string|null; contractor_name:string|null; work_order_date:string|null; work_order_end_date:string|null; project:{id:string;name:string}|null; sitesCount:number; itemsCount:number }>;
-  sites: Array<{ id:string; project_id:string; name:string; site_code:string|null; area_name:string|null; status:string|null; project:{id:string;name:string}|null; ordersCount:number }>;
-  items: Array<{ id:string; name:string; unit:string|null; category:string|null; is_active:boolean; projectsCount:number; ordersCount:number; contract:number; executed:number; remaining:number; value:number }>;
-};
+type ScopeKey='projects'|'workOrders'|'sites'|'items';
+type Entity={id:string;name?:string;title?:string;work_order_number?:string};
+type Result={type:ScopeKey;id:string;title:string;subtitle:string;href:string;score:number;matchKind:string;meta:string[];relations:{project?:Entity|null;site?:Entity|null;order?:Entity|null;item?:Entity|null;sites?:Entity[];orders?:Entity[];items?:Entity[]}};
+type SearchData={query:string;total:number;elapsedMs:number;counts:Record<ScopeKey,number>;results:Result[]};
+const empty:SearchData={query:'',total:0,elapsedMs:0,counts:{projects:0,workOrders:0,sites:0,items:0},results:[]};
+const labels:Record<ScopeKey,string>={projects:'مشروع',workOrders:'أمر عمل',sites:'موقع',items:'بند'};
+const plurals:Record<ScopeKey,string>={projects:'المشاريع',workOrders:'أوامر العمل',sites:'المواقع',items:'البنود'};
+const icons:Record<ScopeKey,string>={projects:'▦',workOrders:'▤',sites:'⌖',items:'◇'};
 
-type ScopeKey = 'projects' | 'workOrders' | 'sites' | 'items';
+function normalize(value:string){return value.normalize('NFKD').replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').toLowerCase();}
+function Highlight({text,query}:{text:string;query:string}){const n=normalize(text),q=normalize(query.trim()),i=n.indexOf(q);if(!q||i<0)return <>{text}</>;return <>{text.slice(0,i)}<mark>{text.slice(i,i+query.trim().length)}</mark>{text.slice(i+query.trim().length)}</>}
 
-const emptyData: SearchData = { query:'', total:0, projects:[], workOrders:[], sites:[], items:[] };
-const number = (value:number) => new Intl.NumberFormat('ar-SA', { maximumFractionDigits: 2 }).format(Number(value || 0));
-const date = (value:string|null) => value ? new Intl.DateTimeFormat('ar-SA', { year:'numeric', month:'short', day:'numeric' }).format(new Date(`${value}T00:00:00`)) : 'غير محدد';
-
-function Icon({ name }: { name:'search'|'project'|'order'|'site'|'item'|'clock'|'arrow'|'close' }) {
-  const paths: Record<string, ReactNode> = {
-    search:<><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
-    project:<><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/></>,
-    order:<><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3V1h6v2M8 8h8M8 12h8M8 16h5"/></>,
-    site:<><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
-    item:<><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></>,
-    clock:<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
-    arrow:<path d="m9 18 6-6-6-6"/>,
-    close:<><path d="m7 7 10 10M17 7 7 17"/></>,
-  };
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+export default function SearchPage(){
+ const [query,setQuery]=useState(''),[data,setData]=useState<SearchData>(empty),[loading,setLoading]=useState(false),[error,setError]=useState(''),[focused,setFocused]=useState(false);
+ const [scopes,setScopes]=useState<Record<ScopeKey,boolean>>({projects:true,workOrders:true,sites:true,items:true});
+ const [recent,setRecent]=useState<string[]>([]),[visible,setVisible]=useState(6); const requestId=useRef(0),inputRef=useRef<HTMLInputElement>(null);
+ useEffect(()=>{try{setRecent(JSON.parse(localStorage.getItem('work-orders-recent-searches')||'[]'))}catch{}},[]);
+ useEffect(()=>{const shortcut=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();inputRef.current?.focus()}};addEventListener('keydown',shortcut);return()=>removeEventListener('keydown',shortcut)},[]);
+ useEffect(()=>{const value=query.trim();setVisible(6);if(value.length<2){requestId.current++;setData(empty);setLoading(false);setError('');return}const id=++requestId.current;const controller=new AbortController();const timer=setTimeout(async()=>{setLoading(true);setError('');try{const response=await fetch(`/api/search?q=${encodeURIComponent(value)}`,{cache:'no-store',signal:controller.signal});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'تعذر تنفيذ البحث.');if(id===requestId.current)setData(payload)}catch(e){if(id===requestId.current&&!(e instanceof DOMException&&e.name==='AbortError'))setError(e instanceof Error?e.message:'تعذر تنفيذ البحث.')}finally{if(id===requestId.current)setLoading(false)}},250);return()=>{clearTimeout(timer);controller.abort()}},[query]);
+ const filtered=useMemo(()=>data.results.filter(r=>scopes[r.type]),[data,scopes]); const shown=filtered.slice(0,visible);
+ const suggestions=useMemo(()=>data.results.slice(0,6),[data]);
+ function selectSearch(value:string){setQuery(value);setFocused(false);const next=[value,...recent.filter(x=>x!==value)].slice(0,10);setRecent(next);localStorage.setItem('work-orders-recent-searches',JSON.stringify(next))}
+ function clearHistory(){setRecent([]);localStorage.removeItem('work-orders-recent-searches')}
+ return <div className="module-page global-search-page">
+  <section className="global-search-hero"><span className="eyebrow">مركز التنقل والاستعلام</span><h1>مركز البحث الشامل</h1><p>ابحث في قاعدة المعرفة كاملة، وشاهد النتائج وعلاقاتها مرتبة حسب قوة المطابقة.</p>
+   <div className="global-search-box-wrap"><div className="global-search-box"><span className="search-glyph">⌕</span><input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setTimeout(()=>setFocused(false),180)} placeholder="ابحث عن مشروع، أمر عمل، موقع، بند أو رقم..." autoFocus/>{loading?<span className="global-search-spinner"/>:query?<button onClick={()=>setQuery('')} aria-label="مسح">×</button>:<kbd>Ctrl K</kbd>}</div>
+    {focused&&query.trim().length>=2&&suggestions.length>0?<div className="search-suggestion-panel"><strong>اقتراحات البحث</strong>{suggestions.map(r=><button key={`${r.type}-${r.id}`} onMouseDown={()=>selectSearch(r.title)}><i>{icons[r.type]}</i><span><Highlight text={r.title} query={query}/><small>{labels[r.type]}</small></span></button>)}</div>:null}
+    {focused&&query.trim().length<2&&recent.length>0?<div className="recent-search-panel"><div className="recent-head"><strong>آخر عمليات البحث</strong><button onMouseDown={clearHistory}>مسح السجل</button></div>{recent.map(x=><button key={x} onMouseDown={()=>selectSearch(x)}>↶ <span>{x}</span></button>)}</div>:null}
+   </div>
+   <div className="search-scope-row">{(Object.keys(scopes) as ScopeKey[]).map(key=><button key={key} className={scopes[key]?'active':''} onClick={()=>setScopes(s=>({...s,[key]:!s[key]}))}><span>{icons[key]}</span><span>{plurals[key]}</span><b>{data.counts[key]}</b></button>)}</div>
+  </section>
+  {query.trim().length>=2?<section className="search-summary-bar"><div><span>تم العثور على</span><strong>{filtered.length} نتيجة</strong></div><div><span>زمن البحث</span><strong>{data.elapsedMs}ms</strong></div><div className="match-legend"><i/> مطابقة تامة <i/> بداية الاسم <i/> ضمن الاسم <i/> التفاصيل</div></section>:null}
+  {error?<div className="integration-message">{error}</div>:null}
+  {!query.trim()?<section className="search-start-state"><div className="search-start-icon">⌕</div><h2>كل معلومة على بُعد بحث واحد</h2><p>اكتب اسمًا أو رقمًا أو رمزًا، وستظهر النتائج وعلاقاتها في قائمة واحدة.</p><div className="search-examples"><button onClick={()=>selectSearch('الري')}>الري</button><button onClick={()=>selectSearch('05')}>أمر 05</button><button onClick={()=>selectSearch('SITE')}>SITE</button></div></section>:null}
+  {query.trim().length===1?<section className="search-start-state compact"><h2>اكتب حرفًا إضافيًا لبدء البحث</h2></section>:null}
+  {query.trim().length>=2&&!loading&&!filtered.length&&!error?<section className="search-empty-state"><div>⌕</div><h2>لا توجد نتائج مطابقة</h2><p>جرّب كلمة أو رقمًا مختلفًا، أو فعّل نطاقات إضافية.</p></section>:null}
+  {shown.length?<section className="unified-results"><header><div><span className="eyebrow">مرتبة حسب قوة المطابقة</span><h2>النتائج</h2></div><b>{filtered.length}</b></header><div className="unified-results-list">{shown.map((r,index)=><ResultCard key={`${r.type}-${r.id}`} result={r} query={query} index={index}/>)}</div>{visible<filtered.length?<button className="show-more-results" onClick={()=>setVisible(v=>v+12)}>عرض المزيد <span>({filtered.length-visible} نتيجة)</span></button>:null}</section>:null}
+ </div>
 }
 
-export default function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [data, setData] = useState<SearchData>(emptyData);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [scopes, setScopes] = useState<Record<ScopeKey, boolean>>({ projects:true, workOrders:true, sites:true, items:true });
-  const [recent, setRecent] = useState<string[]>([]);
-  const [focused, setFocused] = useState(false);
-  const requestId = useRef(0);
-
-  useEffect(() => {
-    try { setRecent(JSON.parse(localStorage.getItem('work-orders-recent-searches') || '[]')); } catch { setRecent([]); }
-  }, []);
-
-  useEffect(() => {
-    const value = query.trim();
-    if (value.length < 2) { setData(emptyData); setLoading(false); setError(''); return; }
-    const id = ++requestId.current;
-    const timer = window.setTimeout(async () => {
-      setLoading(true); setError('');
-      try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(value)}`, { cache:'no-store' });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || 'تعذر تنفيذ البحث.');
-        if (id !== requestId.current) return;
-        setData(payload as SearchData);
-        const next = [value, ...recent.filter((item) => item !== value)].slice(0, 5);
-        setRecent(next);
-        localStorage.setItem('work-orders-recent-searches', JSON.stringify(next));
-      } catch (searchError) {
-        if (id === requestId.current) setError(searchError instanceof Error ? searchError.message : 'تعذر تنفيذ البحث.');
-      } finally { if (id === requestId.current) setLoading(false); }
-    }, 280);
-    return () => window.clearTimeout(timer);
-  }, [query]);
-
-  const visibleTotal = useMemo(() =>
-    (scopes.projects ? data.projects.length : 0) +
-    (scopes.workOrders ? data.workOrders.length : 0) +
-    (scopes.sites ? data.sites.length : 0) +
-    (scopes.items ? data.items.length : 0), [data, scopes]);
-
-  function toggleScope(key: ScopeKey) { setScopes((current) => ({ ...current, [key]: !current[key] })); }
-  function clearSearch() { setQuery(''); setData(emptyData); }
-
-  return <div className="module-page global-search-page">
-    <section className="global-search-hero">
-      <span className="eyebrow">مركز التنقل والاستعلام</span>
-      <h1>مركز البحث الشامل</h1>
-      <p>ابحث عن أي مشروع أو أمر عمل أو موقع أو بند أو رقم، واستعرض العلاقات والنتائج من شاشة واحدة.</p>
-
-      <div className="global-search-box-wrap">
-        <div className="global-search-box">
-          <Icon name="search" />
-          <input value={query} onChange={(event)=>setQuery(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>window.setTimeout(()=>setFocused(false),150)} placeholder="ابحث عن مشروع، أمر عمل، موقع، بند أو رقم..." autoFocus />
-          {loading ? <span className="global-search-spinner" /> : query ? <button type="button" onClick={clearSearch} aria-label="مسح البحث"><Icon name="close" /></button> : <kbd>⌘ K</kbd>}
-        </div>
-        {focused && query.length < 2 && recent.length > 0 ? <div className="recent-search-panel">
-          <strong><Icon name="clock" /> عمليات البحث الأخيرة</strong>
-          {recent.map((item)=><button key={item} type="button" onMouseDown={()=>setQuery(item)}>{item}</button>)}
-        </div> : null}
-      </div>
-
-      <div className="search-scope-row">
-        {([
-          ['projects','المشاريع','project'],['workOrders','أوامر العمل','order'],['sites','المواقع','site'],['items','البنود','item'],
-        ] as Array<[ScopeKey,string,'project'|'order'|'site'|'item']>).map(([key,label,icon])=><button key={key} type="button" className={scopes[key]?'active':''} onClick={()=>toggleScope(key)}><Icon name={icon}/><span>{label}</span><b>{data[key].length}</b></button>)}
-      </div>
-    </section>
-
-    {query.trim().length >= 2 ? <section className="search-overview-strip">
-      <div><small>إجمالي النتائج</small><strong>{visibleTotal}</strong></div>
-      <div><small>المشاريع</small><strong>{scopes.projects ? data.projects.length : 0}</strong></div>
-      <div><small>أوامر العمل</small><strong>{scopes.workOrders ? data.workOrders.length : 0}</strong></div>
-      <div><small>المواقع</small><strong>{scopes.sites ? data.sites.length : 0}</strong></div>
-      <div><small>البنود</small><strong>{scopes.items ? data.items.length : 0}</strong></div>
-    </section> : null}
-
-    {error ? <div className="integration-message">{error}</div> : null}
-
-    {!query.trim() ? <section className="search-start-state"><div className="search-start-icon"><Icon name="search"/></div><h2>ابدأ بكتابة ما تبحث عنه</h2><p>يمكنك البحث بالاسم أو الرقم أو الرمز أو المقاول أو البلدية أو حتى جزء من وصف البند.</p><div className="search-examples"><button onClick={()=>setQuery('الري')}>الري</button><button onClick={()=>setQuery('05')}>أمر 05</button><button onClick={()=>setQuery('SITE')}>SITE</button></div></section> : null}
-
-    {query.trim().length === 1 ? <section className="search-start-state compact"><h2>اكتب حرفًا إضافيًا لبدء البحث</h2></section> : null}
-
-    {query.trim().length >= 2 && !loading && visibleTotal === 0 && !error ? <section className="search-empty-state"><div><Icon name="search"/></div><h2>لم يتم العثور على نتائج مطابقة</h2><p>جرّب كلمة أخرى، رقمًا مختلفًا، أو فعّل نطاقات بحث إضافية.</p></section> : null}
-
-    <div className="search-results-stack">
-      {scopes.projects && data.projects.length ? <ResultSection title="المشاريع" icon="project" count={data.projects.length}>
-        <div className="search-result-grid projects">
-          {data.projects.map((row)=><article className="search-result-card project-result" key={row.id}><div className="result-card-icon"><Icon name="project"/></div><div className="result-card-body"><span className="result-type">مشروع</span><h3>{row.name}</h3><p>{[row.municipality,row.contractor_name].filter(Boolean).join(' · ') || 'لا توجد بيانات تعريفية إضافية'}</p><div className="result-metrics"><span><b>{row.sitesCount}</b> موقع</span><span><b>{row.ordersCount}</b> أمر</span><span><b>{row.itemsCount}</b> بند</span></div></div><Link href={`/project/${row.id}`}>فتح المشروع <Icon name="arrow"/></Link></article>)}
-        </div>
-      </ResultSection> : null}
-
-      {scopes.workOrders && data.workOrders.length ? <ResultSection title="أوامر العمل" icon="order" count={data.workOrders.length}>
-        <div className="search-result-grid orders">
-          {data.workOrders.map((row)=><article className="search-result-card order-result" key={row.id}><div className="result-number">{row.work_order_number}</div><div className="result-card-body"><span className="result-type">أمر عمل</span><h3>{row.title || `أمر عمل رقم ${row.work_order_number}`}</h3><p>{row.project?.name || 'مشروع غير محدد'}</p><div className="result-meta"><span>{row.status || 'معتمد'}</span><span>{date(row.work_order_date)} — {date(row.work_order_end_date)}</span></div><div className="result-metrics"><span><b>{row.sitesCount}</b> موقع</span><span><b>{row.itemsCount}</b> بند</span></div></div><Link href={`/work-order/${row.id}`}>فتح الأمر <Icon name="arrow"/></Link></article>)}
-        </div>
-      </ResultSection> : null}
-
-      {scopes.sites && data.sites.length ? <ResultSection title="المواقع" icon="site" count={data.sites.length}>
-        <div className="search-result-grid sites">
-          {data.sites.map((row)=><article className="search-result-card site-result" key={row.id}><div className="result-card-icon"><Icon name="site"/></div><div className="result-card-body"><span className="result-type">موقع {row.site_code ? `· ${row.site_code}` : ''}</span><h3>{row.name}</h3><p>{row.project?.name || 'مشروع غير محدد'}</p><div className="result-meta"><span>{row.area_name || 'النطاق غير مسجل'}</span><span>{row.status || 'نشط'}</span></div><div className="result-metrics"><span><b>{row.ordersCount}</b> أمر عمل مرتبط</span></div></div><Link href={`/site/${row.id}`}>فتح الموقع <Icon name="arrow"/></Link></article>)}
-        </div>
-      </ResultSection> : null}
-
-      {scopes.items && data.items.length ? <ResultSection title="البنود" icon="item" count={data.items.length}>
-        <div className="search-result-grid items">
-          {data.items.map((row)=><article className="search-result-card item-result" key={row.id}><div className="result-card-icon"><Icon name="item"/></div><div className="result-card-body"><span className="result-type">بند · {row.category || 'غير مصنف'}</span><h3 title={row.name}>{row.name}</h3><p>الوحدة: {row.unit || 'غير مسجلة'}</p><div className="result-metrics"><span><b>{row.projectsCount}</b> مشروع</span><span><b>{row.ordersCount}</b> أمر</span><span><b>{number(row.remaining)}</b> متبقي</span></div><div className="item-search-progress"><span style={{width:`${row.contract > 0 ? Math.min(100,(row.executed/row.contract)*100) : 0}%`}}/></div></div><Link href={`/items?itemId=${row.id}`}>عرض البند <Icon name="arrow"/></Link></article>)}
-        </div>
-      </ResultSection> : null}
-    </div>
-  </div>;
-}
-
-function ResultSection({ title, icon, count, children }:{ title:string; icon:'project'|'order'|'site'|'item'; count:number; children:ReactNode }) {
-  return <section className="search-result-section"><header><div className="section-title-icon"><Icon name={icon}/></div><div><span className="eyebrow">نتائج مطابقة</span><h2>{title}</h2></div><b>{count}</b></header>{children}</section>;
-}
+function ResultCard({result:r,query,index}:{result:Result;query:string;index:number}){const relationRows=[r.relations.project&&{type:'projects' as ScopeKey,label:r.relations.project.name||'المشروع',href:`/project/${r.relations.project.id}`},r.relations.site&&{type:'sites' as ScopeKey,label:r.relations.site.name||'الموقع',href:`/site/${r.relations.site.id}`},r.relations.order&&{type:'workOrders' as ScopeKey,label:r.relations.order.title||`أمر ${r.relations.order.work_order_number}`,href:`/work-order/${r.relations.order.id}`},r.relations.item&&{type:'items' as ScopeKey,label:r.relations.item.name||'البند',href:`/items?itemId=${r.relations.item.id}`}].filter(Boolean) as Array<{type:ScopeKey;label:string;href:string}>;
+ const extras=[...(r.relations.sites||[]).map(x=>({type:'sites' as ScopeKey,label:x.name||'موقع',href:`/site/${x.id}`})),...(r.relations.orders||[]).map(x=>({type:'workOrders' as ScopeKey,label:x.title||`أمر ${x.work_order_number}`,href:`/work-order/${x.id}`})),...(r.relations.items||[]).map(x=>({type:'items' as ScopeKey,label:x.name||'بند',href:`/items?itemId=${x.id}`}))];
+ const links=[...relationRows,...extras].filter((x,i,a)=>a.findIndex(y=>y.href===x.href)===i).slice(0,4);
+ return <article className={`unified-result-card rank-${Math.floor(r.score/100)}`}><div className="unified-rank">{index+1}</div><div className="unified-type-icon">{icons[r.type]}</div><div className="unified-main"><div className="result-label-row"><span className={`entity-badge ${r.type}`}>{labels[r.type]}</span><span className="match-badge">{r.matchKind}</span></div><h3><Highlight text={r.title} query={query}/></h3><p><Highlight text={r.subtitle||'لا توجد بيانات إضافية'} query={query}/></p><div className="result-meta">{r.meta.map((x,i)=><span key={i}><Highlight text={String(x)} query={query}/></span>)}</div>{links.length?<div className="smart-relation"><small>العلاقات الذكية</small><div>{links.map((x,i)=><Fragment key={x.href}>{i>0?<span className="relation-arrow">←</span>:null}<Link href={x.href}><i>{icons[x.type]}</i>{x.label}</Link></Fragment>)}</div></div>:null}</div><div className="result-quick-actions"><Link className="primary" href={r.href}>فتح {labels[r.type]}</Link>{links.filter(x=>x.href!==r.href).slice(0,2).map(x=><Link key={x.href} href={x.href}>فتح {labels[x.type]}</Link>)}</div></article>}
