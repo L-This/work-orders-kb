@@ -15,17 +15,21 @@ export async function GET() {
       .select('work_orders_project_id,irrigation_project_id,irrigation_project_name,last_synced_at');
 
     const [workProjects, irrigationProjects, sites, imports] = await Promise.all([
-      work.from('projects').select('id,name,contractor_name').order('name'),
+      work.from('projects').select('id,name,contractor_name').is('deleted_at', null).or('status.is.null,status.neq.deleted').order('name'),
       irrigation.from('projects').select('id,name').order('name'),
       work.from('sites').select('id,project_id,status,source_system,synced_at'),
-      work.from('import_batches').select('id,import_status,error_rows_count,created_at').order('created_at', { ascending: false }).limit(20),
+      work.from('import_batches').select('id,project_id,import_status,error_rows_count,created_at').order('created_at', { ascending: false }).limit(20),
     ]);
 
     const error = workProjects.error || irrigationProjects.error || sites.error || imports.error || links.error;
     if (error) throw error;
 
+    const activeProjectIds = new Set((workProjects.data || []).map((project) => project.id));
+    const activeSites = (sites.data || []).filter((site) => activeProjectIds.has(site.project_id));
+    const activeLinks = (links.data || []).filter((link) => activeProjectIds.has(link.work_orders_project_id));
+    const activeImports = (imports.data || []).filter((batch) => !batch.project_id || activeProjectIds.has(batch.project_id));
     const projectSiteStats: Record<string, { total: number; synced: number; inactive: number }> = {};
-    for (const site of sites.data || []) {
+    for (const site of activeSites) {
       const stats = projectSiteStats[site.project_id] || { total: 0, synced: 0, inactive: 0 };
       stats.total += 1;
       if (site.source_system === 'irrigation') stats.synced += 1;
@@ -36,13 +40,13 @@ export async function GET() {
     return NextResponse.json({
       workProjects: workProjects.data || [],
       irrigationProjects: irrigationProjects.data || [],
-      links: links.data || [],
+      links: activeLinks,
       projectSiteStats,
       summary: {
-        sites: (sites.data || []).length,
-        syncedSites: (sites.data || []).filter((site) => site.source_system === 'irrigation').length,
-        inactiveSites: (sites.data || []).filter((site) => site.status === 'inactive').length,
-        failedImports: (imports.data || []).filter((batch) => batch.import_status === 'failed' || Number(batch.error_rows_count || 0) > 0).length,
+        sites: activeSites.length,
+        syncedSites: activeSites.filter((site) => site.source_system === 'irrigation').length,
+        inactiveSites: activeSites.filter((site) => site.status === 'inactive').length,
+        failedImports: activeImports.filter((batch) => batch.import_status === 'failed' || Number(batch.error_rows_count || 0) > 0).length,
       },
     });
   } catch (error) {
