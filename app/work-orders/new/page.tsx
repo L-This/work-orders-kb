@@ -484,7 +484,6 @@ export default function NewWorkOrderPage() {
         {!projectId ? <div className="empty compact">اختر المشروع أولًا لعرض المواقع.</div> : projectLoading ? <div className="empty compact">جاري تحميل مواقع المشروع...</div> : (
           <div className="site-picker-panel">
             <div className="site-picker-toolbar">
-              <input value={siteQuery} onChange={(event) => setSiteQuery(event.target.value)} placeholder="ابحث عن موقع..." />
               <button className="btn" type="button" onClick={selectVisibleSites} disabled={!visibleSites.length}>تحديد الظاهر</button>
               <button className="btn" type="button" onClick={clearSites} disabled={!selectedSiteIds.length}>إلغاء الكل</button>
             </div>

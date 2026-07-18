@@ -180,14 +180,6 @@ export default function Page() {
       <div><small>متوقفة</small><strong>{summary.inactive}</strong><span>تحتاج مراجعة</span></div>
     </section>
 
-    <section className="items-filter-panel">
-      <label className="items-search"><span>البحث</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="اسم البند، الفئة، الوحدة أو المشروع..." /></label>
-      <label><span>الحالة</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">كل الحالات</option><option value="active">نشطة</option><option value="inactive">متوقفة</option></select></label>
-      <label><span>الفئة</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">كل الفئات</option>{categories.map((value) => <option key={value}>{value}</option>)}</select></label>
-      <label><span>الوحدة</span><select value={unit} onChange={(event) => setUnit(event.target.value)}><option value="all">كل الوحدات</option>{units.map((value) => <option key={value}>{value}</option>)}</select></label>
-      <label><span>الترتيب</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="usage">الأكثر استخدامًا</option><option value="name">الاسم</option><option value="value">أعلى قيمة عقدية</option><option value="remaining">أعلى رصيد متبقٍ</option></select></label>
-    </section>
-
     <section className="items-results-section">
       <div className="items-results-head"><div><span className="eyebrow">النتائج</span><h2>دليل البنود</h2></div><span>{filtered.length} من {stats.length} بند</span></div>
       {loading ? <div className="items-skeleton-grid">{Array.from({ length: 6 }).map((_, index) => <div key={index} />)}</div> : filtered.length ? (
@@ -221,7 +213,7 @@ export default function Page() {
             <button className="item-open-button" type="button" onClick={() => setDetails(item)}><Icon name="chart"/><span>فتح تفاصيل البند</span></button>
           </article>)}
         </div>
-      ) : <div className="module-empty"><strong>لا توجد بنود مطابقة</strong><span>غيّر البحث أو الفلاتر، أو أضف بندًا جديدًا.</span></div>}
+      ) : <div className="module-empty"><strong>لا توجد بنود مسجلة</strong><span>أضف بندًا جديدًا لبدء العمل.</span></div>}
     </section>
 
     {typeof document !== 'undefined' && editor ? createPortal(<ItemEditor state={editor} busy={busy} onClose={() => setEditor(null)} onSaved={async (text) => { setMessage(text); setEditor(null); await load(); }} setBusy={setBusy} />, document.body) : null}

@@ -337,44 +337,12 @@ export default function ProjectsPage() {
         <article className={totals.attention ? 'attention' : ''}><small>تحتاج متابعة</small><strong>{totals.attention}</strong><span>مشاريع بها موعد قريب</span></article>
       </section>
 
-      <section className="projects-toolbar">
-        <div className="projects-search-field">
-          <span>⌕</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث باسم المشروع، البلدية، المقاول أو الرمز..." />
-          {query && <button onClick={() => setQuery('')} aria-label="مسح البحث">×</button>}
-        </div>
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="حالة المشروع">
-          <option value="all">كل حالات المشاريع</option>
-          <option value="نشط">نشط</option>
-          <option value="منتهي">منتهي</option>
-          <option value="متوقف">متوقف</option>
-          <option value="مؤرشف">مؤرشف</option>
-        </select>
-        <select value={timingFilter} onChange={(event) => setTimingFilter(event.target.value)} aria-label="المتابعة الزمنية">
-          <option value="all">كل الحالات الزمنية</option>
-          <option value="active">بها أوامر جارية</option>
-          <option value="upcoming">بها أوامر قادمة</option>
-          <option value="ending">قريبة من الانتهاء</option>
-          <option value="without-orders">بدون أوامر عمل</option>
-        </select>
-        <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} aria-label="ترتيب المشاريع">
-          <option value="activity">الأكثر نشاطًا</option>
-          <option value="orders">الأكثر أوامر عمل</option>
-          <option value="sites">الأكثر مواقع</option>
-          <option value="name">الاسم أبجديًا</option>
-        </select>
-        <div className="projects-view-switch" aria-label="طريقة العرض">
-          <button className={view === 'cards' ? 'active' : ''} onClick={() => setView('cards')}>▦</button>
-          <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>▤</button>
-        </div>
-      </section>
-
       <section className="projects-results-head">
         <div><span className="section-kicker">النتائج</span><h2>دليل المشاريع</h2></div>
         <strong>{filtered.length} من {summaries.length} مشروع</strong>
       </section>
 
-      {view === 'cards' ? (
+      {(
         <section className="projects-management-grid">
           {filtered.map((project, index) => (
             <article className="project-management-card" key={project.id}>
@@ -430,16 +398,12 @@ export default function ProjectsPage() {
               </div>
               <div className="project-card-actions project-card-actions-hierarchy">
                 <Link href={`/project/${project.id}`} className="btn primary project-open-main">فتح المشروع</Link>
-                <div className="project-card-shortcuts">
-                  <Link href={`/sites?project=${project.id}`} className="btn">المواقع</Link>
-                  <Link href={`/items?project=${project.id}`} className="btn">البنود</Link>
-                  <Link href={`/work-orders?project=${project.id}`} className="btn">أوامر العمل</Link>
-                </div>
               </div>
             </article>
           ))}
         </section>
-      ) : (
+      )}
+      {false ? (
         <section className="projects-table-wrap">
           <table className="projects-management-table">
             <colgroup>
@@ -468,9 +432,9 @@ export default function ProjectsPage() {
             </tr>)}</tbody>
           </table>
         </section>
-      )}
+      ) : null}
 
-      {!loading && filtered.length === 0 && <div className="projects-empty-state"><b>لا توجد مشاريع مطابقة</b><span>غيّر عبارة البحث أو الفلاتر المستخدمة.</span><button className="btn" onClick={() => { setQuery(''); setStatusFilter('all'); setTimingFilter('all'); }}>إعادة ضبط الفلاتر</button></div>}
+      {!loading && filtered.length === 0 && <div className="projects-empty-state"><b>لا توجد مشاريع مسجلة</b><span>أضف مشروعًا جديدًا لبدء العمل.</span></div>}
 
       {editorOpen ? <div className="project-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) { setEditorOpen(false); setCreatedProject(null); } }}>
         <section className="project-editor-modal" role="dialog" aria-modal="true" aria-label={editingProject ? 'تعديل المشروع' : 'إنشاء مشروع جديد'}>

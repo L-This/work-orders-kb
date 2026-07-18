@@ -408,7 +408,6 @@ export default function ImportPage() {
               <div><span className="section-kicker">المراجعة</span><h2>أوامر العمل والمواقع</h2></div>
               <span>{filteredOrders.length} من {data.workOrders.length} أوامر</span>
             </div>
-            <div className="import-order-toolbar"><input value={orderQuery} onChange={event=>{setOrderQuery(event.target.value);setShowAllOrders(false)}} placeholder="ابحث برقم الأمر أو الموقع أو اسم البند..." />{orderQuery?<button type="button" onClick={()=>setOrderQuery('')}>مسح</button>:null}</div>
             <div className="import-orders-grid">
               {visibleOrders.map(order => {
                 const timing = getWorkOrderTiming(order.startDate, order.endDate);

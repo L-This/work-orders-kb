@@ -16,7 +16,7 @@ type ProjectItemRow = {
   sites_count?: number | string | null;
   work_orders_count?: number | string | null;
 };
-type WorkOrderRow = { id: string };
+type WorkOrderRow = { id: string; work_order_number?: string | null; title?: string | null; status?: string | null; work_order_date?: string | null };
 type WorkOrderItemRow = { work_order_id: string; item_id: string };
 type WorkOrderSiteRow = { work_order_id: string; site_id: string };
 
@@ -27,7 +27,7 @@ export default function ProjectPage({ params }: { params: { projectId: string } 
   const [workOrders, setWorkOrders] = useState<WorkOrderRow[]>([]);
   const [workOrderItems, setWorkOrderItems] = useState<WorkOrderItemRow[]>([]);
   const [workOrderSites, setWorkOrderSites] = useState<WorkOrderSiteRow[]>([]);
-  const [q, setQ] = useState('');
+  const [activeSection, setActiveSection] = useState<'sites' | 'orders' | 'items' | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -48,7 +48,7 @@ export default function ProjectPage({ params }: { params: { projectId: string } 
         .select('*')
         .eq('project_id', params.projectId)
         .order('total_quantity', { ascending: false }),
-      supabase.from('work_orders').select('id').eq('project_id', params.projectId),
+      supabase.from('work_orders').select('id,work_order_number,title,status,work_order_date').eq('project_id', params.projectId).order('work_order_date', { ascending: false, nullsFirst: false }),
     ]);
 
     if (projectResult.error || sitesResult.error || itemsResult.error || workOrdersResult.error) {
@@ -136,34 +136,14 @@ export default function ProjectPage({ params }: { params: { projectId: string } 
     [items, itemUsage],
   );
 
-  const filteredSites = useMemo(
-    () => sites.filter((site) => !q || site.name.includes(q)),
-    [sites, q],
-  );
-
-  const filteredItems = useMemo(
-    () =>
-      enrichedItems.filter(
-        (item) => !q || `${item.item_name} ${item.category || ''}`.includes(q),
-      ),
-    [enrichedItems, q],
-  );
-
   const totalRemaining = enrichedItems.reduce(
     (sum, item) => sum + (Number(item.total_remaining_quantity) || 0),
     0,
   );
 
   return (
-    <main className="page">
-      <Link href="/" className="btn">رجوع للرئيسية</Link>
-
-      <div className="section-title">
-        <h3>{project?.name || 'المشروع'}</h3>
-        <button className="btn" onClick={load} disabled={loading}>
-          {loading ? 'جاري التحديث...' : 'تحديث'}
-        </button>
-      </div>
+    <main className="page project-hub-page">
+      <div className="project-hub-heading"><div><span className="eyebrow">مركز المشروع</span><h1>{project?.name || 'المشروع'}</h1><p>اختر القسم الذي تريد استعراضه؛ سيبقى قسم واحد فقط مفتوحًا لتصفح أسرع وأكثر وضوحًا.</p></div><Link href="/projects" className="btn">جميع المشاريع</Link></div>
 
       {message ? <div className="notice">{message}</div> : null}
 
@@ -175,61 +155,18 @@ export default function ProjectPage({ params }: { params: { projectId: string } 
         <div className="stat"><strong>{totalRemaining.toLocaleString()}</strong><span>إجمالي متبقي</span></div>
       </div>
 
-      <div className="toolbar">
-        <input
-          className="input"
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          placeholder="بحث داخل المشروع: موقع أو بند"
-        />
-      </div>
+      <section className="project-section-switcher">
+        <button className={activeSection==='sites'?'active':''} onClick={()=>setActiveSection(activeSection==='sites'?null:'sites')}><span>⌖</span><div><small>نطاق المشروع</small><strong>المواقع</strong><p>{sites.length} موقع مرتبط</p></div><i>{activeSection==='sites'?'−':'+'}</i></button>
+        <button className={activeSection==='orders'?'active':''} onClick={()=>setActiveSection(activeSection==='orders'?null:'orders')}><span>▤</span><div><small>التنفيذ الزمني</small><strong>أوامر العمل</strong><p>{workOrders.length} أمر مسجل</p></div><i>{activeSection==='orders'?'−':'+'}</i></button>
+        <button className={activeSection==='items'?'active':''} onClick={()=>setActiveSection(activeSection==='items'?null:'items')}><span>≡</span><div><small>الكميات والتنفيذ</small><strong>البنود</strong><p>{enrichedItems.length} بند مختلف</p></div><i>{activeSection==='items'?'−':'+'}</i></button>
+      </section>
 
-      <div className="two-col">
-        <section className="panel">
-          <h3>المواقع</h3>
-          {filteredSites.map((site) => (
-            <Link
-              key={site.id}
-              className="card"
-              style={{ display: 'block', marginBottom: 10 }}
-              href={`/site/${site.id}`}
-            >
-              {site.name}
-              <p className="muted">{site.area_name || 'صفحة قصة الموقع'}</p>
-            </Link>
-          ))}
-        </section>
-
-        <section className="panel">
-          <h3>البنود داخل المشروع</h3>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>البند</th>
-                  <th>المواقع</th>
-                  <th>أوامر العمل</th>
-                  <th>الكمية</th>
-                  <th>المنفذ</th>
-                  <th>المتبقي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.map((item) => (
-                  <tr key={item.item_id}>
-                    <td><b>{item.item_name}</b></td>
-                    <td>{item.sites_count}</td>
-                    <td>{item.work_orders_count}</td>
-                    <td>{Number(item.total_quantity || 0).toLocaleString()}</td>
-                    <td>{Number(item.total_executed_quantity || 0).toLocaleString()}</td>
-                    <td>{Number(item.total_remaining_quantity || 0).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+      {activeSection?<section className="project-section-stage">
+        <header><div><span className="section-kicker">تفاصيل المشروع</span><h2>{activeSection==='sites'?'المواقع':activeSection==='orders'?'أوامر العمل':'البنود والكميات'}</h2></div><button onClick={()=>setActiveSection(null)}>إغلاق ×</button></header>
+        {activeSection==='sites'?<div className="project-stage-grid">{sites.map(site=><Link href={`/site/${site.id}`} key={site.id}><span>⌖</span><div><strong>{site.name}</strong><small>{site.area_name||'فتح قصة الموقع'}</small></div><i>←</i></Link>)}{!sites.length?<div className="empty">لا توجد مواقع مرتبطة بالمشروع.</div>:null}</div>:null}
+        {activeSection==='orders'?<div className="project-stage-grid">{workOrders.map(order=><Link href={`/work-order/${order.id}`} key={order.id}><span>▤</span><div><strong>{order.title||`أمر عمل رقم ${order.work_order_number||'—'}`}</strong><small>{[order.work_order_date,order.status].filter(Boolean).join(' · ')||'فتح التفاصيل'}</small></div><i>←</i></Link>)}{!workOrders.length?<div className="empty">لا توجد أوامر عمل مرتبطة بالمشروع.</div>:null}</div>:null}
+        {activeSection==='items'?<div className="project-item-card-grid">{enrichedItems.map(item=><article key={item.item_id}><small>{item.category||'بند مشروع'}</small><h3>{item.item_name}</h3><div><span>الأوامر <b>{item.work_orders_count}</b></span><span>المواقع <b>{item.sites_count}</b></span><span>المتبقي <b>{Number(item.total_remaining_quantity||0).toLocaleString()}</b></span></div></article>)}{!enrichedItems.length?<div className="empty">لا توجد بنود منفذة داخل المشروع.</div>:null}</div>:null}
+      </section>:<div className="project-hub-empty"><span>↑</span><strong>اختر بطاقة لعرض التفاصيل</strong><p>يمكنك الانتقال بين الأقسام دون ازدحام الصفحة.</p></div>}
     </main>
   );
 }

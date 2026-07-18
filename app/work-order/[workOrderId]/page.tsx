@@ -76,7 +76,6 @@ export default function WorkOrderDetailPage({
   const [sites, setSites] = useState<SiteRelation[]>([]);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
-  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
@@ -165,18 +164,6 @@ export default function WorkOrderDetailPage({
     setLoading(false);
   }
 
-  const filteredItems = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter((item) =>
-      `${item.item_no || ''} ${item.items?.name || ''} ${item.items?.category || ''} ${
-        item.unit || ''
-      } ${item.notes || ''}`
-        .toLowerCase()
-        .includes(needle),
-    );
-  }, [items, query]);
-
   const distinctItems = new Set(items.map((item) => item.item_id)).size;
   const totalExecutionValue = items.reduce(
     (sum, item) => sum + (Number(item.total_price) || 0),
@@ -213,9 +200,6 @@ export default function WorkOrderDetailPage({
           <Link href="/work-orders" className="btn">
             جميع أوامر العمل
           </Link>
-          <button className="btn" onClick={load} disabled={loading}>
-            {loading ? 'جاري التحديث...' : 'تحديث'}
-          </button>
         </div>
       </div>
 
@@ -373,15 +357,8 @@ export default function WorkOrderDetailPage({
             <span className="section-kicker">البنود والكميات</span>
             <h2>تفاصيل بنود أمر العمل</h2>
           </div>
-          <span>{filteredItems.length} سجل</span>
+          <span>{items.length} سجل</span>
         </div>
-
-        <input
-          className="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="ابحث برقم البند أو الوصف أو الوحدة..."
-        />
 
         <div className="table-wrap">
           <table className="work-order-items-table">
@@ -397,7 +374,7 @@ export default function WorkOrderDetailPage({
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((item) => (
+              {items.map((item) => (
                 <tr key={item.id}>
                   <td data-label="رقم البند">{item.item_no || '—'}</td>
                   <td data-label="البند" className="work-order-item-description">
@@ -414,8 +391,8 @@ export default function WorkOrderDetailPage({
             </tbody>
           </table>
         </div>
-        {!loading && filteredItems.length === 0 ? (
-          <div className="empty">لا توجد بنود مطابقة للبحث.</div>
+        {!loading && items.length === 0 ? (
+          <div className="empty">لا توجد بنود مسجلة في أمر العمل.</div>
         ) : null}
       </section>
     </main>

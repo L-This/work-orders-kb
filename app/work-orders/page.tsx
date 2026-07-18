@@ -271,23 +271,12 @@ export default function OrdersPage() {
       {successMessage ? <div className="notice success-notice">{successMessage}</div> : null}
 
       <section className="work-orders-executive-stats">
-        <button onClick={() => setTimingFilter('all')} className={timingFilter === 'all' ? 'active' : ''}><small>إجمالي الأوامر</small><strong>{orders.length}</strong><span>أمر مسجل</span></button>
-        <button onClick={() => setTimingFilter('active')} className={timingFilter === 'active' ? 'active' : ''}><small>جارية الآن</small><strong>{timingCounts.active}</strong><span>ضمن فترة التنفيذ</span></button>
-        <button onClick={() => setTimingFilter('ending')} className={timingFilter === 'ending' ? 'active warning' : 'warning'}><small>تنتهي قريبًا</small><strong>{timingCounts.ending}</strong><span>خلال 7 أيام</span></button>
-        <button onClick={() => setTimingFilter('upcoming')} className={timingFilter === 'upcoming' ? 'active' : ''}><small>قادمة</small><strong>{timingCounts.upcoming}</strong><span>لم تبدأ بعد</span></button>
-        <button onClick={() => setTimingFilter('ended')} className={timingFilter === 'ended' ? 'active muted' : 'muted'}><small>منتهية</small><strong>{timingCounts.ended}</strong><span>انتهت مدتها</span></button>
+        <div><small>إجمالي الأوامر</small><strong>{orders.length}</strong><span>أمر مسجل</span></div>
+        <div><small>جارية الآن</small><strong>{timingCounts.active}</strong><span>ضمن فترة التنفيذ</span></div>
+        <div className="warning"><small>تنتهي قريبًا</small><strong>{timingCounts.ending}</strong><span>خلال 7 أيام</span></div>
+        <div><small>قادمة</small><strong>{timingCounts.upcoming}</strong><span>لم تبدأ بعد</span></div>
+        <div className="muted"><small>منتهية</small><strong>{timingCounts.ended}</strong><span>انتهت مدتها</span></div>
         <div><small>قيمة التنفيذ</small><strong>{totalExecutionValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}</strong><span>قبل الضريبة</span></div>
-      </section>
-
-      <section className="section-block work-orders-control-panel">
-        <div className="work-orders-filter-grid-v2">
-          <label className="wide"><span>البحث</span><input className="search" placeholder="رقم الأمر، المشروع، المقاول أو عنوان الأمر..." value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-          <label><span>المشروع</span><select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="all">كل المشاريع</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-          <label><span>الحالة الإدارية</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">كل الحالات</option>{statuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></label>
-          <label><span>الحالة الزمنية</span><select value={timingFilter} onChange={(event) => setTimingFilter(event.target.value as TimingFilter)}>{(Object.keys(timingFilterLabel) as TimingFilter[]).map((key) => <option key={key} value={key}>{timingFilterLabel[key]}</option>)}</select></label>
-          <label><span>الترتيب</span><select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}><option value="newest">الأحدث أولًا</option><option value="ending">الأقرب للانتهاء</option><option value="starting">الأقرب للبدء</option><option value="number">رقم الأمر</option></select></label>
-          <div className="view-switch" aria-label="طريقة العرض"><button className={viewMode === 'cards' ? 'active' : ''} onClick={() => setViewMode('cards')} title="عرض البطاقات">▦</button><button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} title="العرض الجدولي">☷</button></div>
-        </div>
       </section>
 
       <section className="section-block work-orders-results-section">

@@ -20,7 +20,6 @@ export default function SitePage({ params }: { params: { siteId: string } }) {
   const [lines,setLines]=useState<Line[]>([]);
   const [items,setItems]=useState<Item[]>([]);
   const [orderSiteCounts,setOrderSiteCounts]=useState<Record<string,number>>({});
-  const [q,setQ]=useState('');
   const [loading,setLoading]=useState(false);
   const [message,setMessage]=useState('');
 
@@ -68,7 +67,6 @@ export default function SitePage({ params }: { params: { siteId: string } }) {
 
   const itemMap = useMemo(()=>new Map(items.map(i=>[i.id,i])),[items]);
   const linesByOrder = useMemo(()=>{ const m=new Map<string,Line[]>(); for(const l of lines){ if(!m.has(l.work_order_id))m.set(l.work_order_id,[]); m.get(l.work_order_id)!.push(l); } return m; },[lines]);
-  const filteredOrders = useMemo(()=>orders.filter(o=>{ if(!q)return true; const hay=[o.work_order_number,o.work_order_date,...(linesByOrder.get(o.id)||[]).map(l=>itemMap.get(l.item_id)?.name||'')].join(' '); return hay.includes(q); }),[orders,q,linesByOrder,itemMap]);
   const cumulative = useMemo(()=>{ const m=new Map<string,{name:string;unit:string;orders:Set<string>;executed:number;latestRemaining:number}>(); const orderDate=new Map(orders.map(o=>[o.id,o.work_order_date||''])); for(const l of lines){ const key=l.item_id; const name=itemMap.get(key)?.name||`بند ${l.item_no||''}`; if(!m.has(key))m.set(key,{name,unit:l.unit||'—',orders:new Set(),executed:0,latestRemaining:0}); const x=m.get(key)!; x.orders.add(l.work_order_id); x.executed+=num(l.executed_quantity ?? l.quantity); const current=(lines.filter(z=>z.item_id===key).sort((a,b)=>(orderDate.get(b.work_order_id)||'').localeCompare(orderDate.get(a.work_order_id)||''))[0]); x.latestRemaining=num(current?.remaining_quantity); } return [...m.values()].sort((a,b)=>b.executed-a.executed); },[lines,orders,itemMap]);
   const firstDate=[...orders].map(o=>o.work_order_date).filter(Boolean).sort()[0]||'—';
   const lastDate=[...orders].map(o=>o.work_order_date).filter(Boolean).sort().at(-1)||'—';
@@ -77,7 +75,7 @@ export default function SitePage({ params }: { params: { siteId: string } }) {
   return <main className="page site-story-page">
     <div className="section-title">
       <div><span className="eyebrow">قصة الموقع</span><h2>{site?.name || 'الموقع'}</h2><p className="muted">{project?.name || ''}{site?.area_name ? ` · ${site.area_name}` : ''}</p></div>
-      <div className="actions"><Link href={site?.project_id ? `/project/${site.project_id}` : '/projects'} className="btn">رجوع للمشروع</Link><button className="btn" onClick={load} disabled={loading}>{loading?'جاري التحديث...':'تحديث'}</button></div>
+      <div className="actions"><Link href={site?.project_id ? `/project/${site.project_id}` : '/projects'} className="btn">رجوع للمشروع</Link></div>
     </div>
     {message && <div className="notice error-notice">{message}</div>}
 
@@ -91,19 +89,17 @@ export default function SitePage({ params }: { params: { siteId: string } }) {
 
     <div className="notice site-story-note"><b>تنبيه دقة البيانات:</b> هذه الصفحة تثبت أن الموقع ورد ضمن أمر العمل. أما الكميات المعروضة فهي <b>كميات أمر العمل كاملة لجميع المواقع المرتبطة به</b>، ولا تمثل كمية منفذة داخل هذا الموقع بعينه إلا إذا كان أمر العمل مرتبطًا بموقع واحد فقط.</div>
 
-    <div className="toolbar"><input className="input" value={q} onChange={e=>setQ(e.target.value)} placeholder="ابحث في قصة الموقع: رقم أمر، تاريخ، أو اسم بند" /></div>
-
     <section className="panel site-story-section">
-      <div className="section-title"><div><span className="section-kicker">التسلسل الزمني</span><h2>رحلة أوامر العمل</h2></div><span>{filteredOrders.length} أمر</span></div>
+      <div className="section-title"><div><span className="section-kicker">التسلسل الزمني</span><h2>رحلة أوامر العمل</h2></div><span>{orders.length} أمر</span></div>
       <div className="story-timeline">
-        {filteredOrders.map((o,index)=>{ const orderLines=linesByOrder.get(o.id)||[]; const executed=orderLines.reduce((s,l)=>s+num(l.executed_quantity ?? l.quantity),0); return <article className="story-order" key={o.id}>
-          <div className="story-marker">{String(filteredOrders.length-index).padStart(2,'0')}</div>
+        {orders.map((o,index)=>{ const orderLines=linesByOrder.get(o.id)||[]; const executed=orderLines.reduce((s,l)=>s+num(l.executed_quantity ?? l.quantity),0); return <article className="story-order" key={o.id}>
+          <div className="story-marker">{String(orders.length-index).padStart(2,'0')}</div>
           <div className="story-order-card">
             <div className="story-order-head"><div><span className="badge">أمر عمل {o.work_order_number}</span><h3>{o.work_order_date || 'تاريخ غير مسجل'}</h3><p className="muted">{o.title || ''}{o.status ? ` · ${o.status}` : ''}</p></div><div className="story-order-total"><small>إجمالي كميات الأمر لجميع المواقع</small><b>{fmt(executed)}</b><span>{orderLines.length} بند · مرتبط بـ {orderSiteCounts[o.id] || 1} موقع</span></div></div>
             <div className="story-lines">{orderLines.map(l=><div className="story-line" key={l.id}><div><b>{itemMap.get(l.item_id)?.name || `بند ${l.item_no||''}`}</b><small>{l.unit || 'بدون وحدة'}</small></div><span><small>كمية منفذة في أمر العمل</small><b>{fmt(l.executed_quantity ?? l.quantity)}</b></span><span><small>المتبقي في رصيد البند بعد الأمر</small><b>{fmt(l.remaining_quantity)}</b></span></div>)}</div>
           </div>
         </article>})}
-        {!filteredOrders.length && <div className="empty">لا توجد أوامر عمل مطابقة.</div>}
+        {!orders.length && <div className="empty">لا توجد أوامر عمل مرتبطة.</div>}
       </div>
     </section>
 
