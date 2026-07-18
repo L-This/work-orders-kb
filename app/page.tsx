@@ -222,7 +222,6 @@ export default function Home() {
           <p>ملخص مباشر للمشاريع، أوامر العمل، المواعيد والتنبيهات التي تحتاج متابعة.</p>
         </div>
         <div className="dashboard-welcome-actions">
-          <button className="btn" onClick={() => void loadDashboard()} disabled={loading}>{loading ? 'جاري التحديث...' : 'تحديث البيانات'}</button>
           <Link className="btn primary" href="/projects">فتح المشاريع</Link>
         </div>
       </section>
@@ -301,7 +300,7 @@ export default function Home() {
         </div>
 
         <div className="dashboard-section">
-          <div className="dashboard-section-head"><div><span className="section-kicker">الاستيراد</span><h2>آخر ملفات البيانات</h2></div><Link href="/import" className="text-link">استيراد ملف</Link></div>
+          <div className="dashboard-section-head"><div><span className="section-kicker">الاستيراد</span><h2>آخر ملفات البيانات</h2></div></div>
           <div className="dashboard-activity-list">
             {recentImports.slice(0, 5).map((batch) => (
               <article className="dashboard-activity-row" key={batch.id}>
@@ -316,8 +315,7 @@ export default function Home() {
 
       <section className="dashboard-decision-strip">
         <div><span>الرصيد المتبقي المسجل</span><strong>{formatNumber(totalRemaining)}</strong></div>
-        <p>استخدم البحث الشامل وقصة الموقع قبل اعتماد أي احتياج أو إصدار أمر عمل جديد.</p>
-        <Link href="/search" className="btn">فتح البحث الشامل</Link>
+        <p>استخدم قصة الموقع قبل اعتماد أي احتياج أو إصدار أمر عمل جديد.</p>
       </section>
     </main>
   );

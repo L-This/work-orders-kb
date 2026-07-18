@@ -8,7 +8,8 @@ const nav=[
 ["/import","استيراد Excel","⇧"],["/alerts","مركز التنبيهات","!"],["/admin","إدارة النظام","⚙"]
 ];
 export default function AppShell({children}:{children:ReactNode}){
- const path=usePathname(); const [collapsed,setCollapsed]=useState(false);
+ const path=usePathname(); const [collapsed,setCollapsed]=useState(false); const [refreshing,setRefreshing]=useState(false);
+ function refreshPage(){setRefreshing(true);window.location.reload()}
  return <div className={`system-shell ${collapsed?"shell-collapsed":""}`}>
   <aside className="system-sidebar">
    <div className="sidebar-brand"><div className="brand-mark">م</div><div className="brand-copy"><strong>مرجع أوامر العمل</strong><span>قاعدة المعرفة التشغيلية</span></div></div>
@@ -21,8 +22,8 @@ export default function AppShell({children}:{children:ReactNode}){
   <section className="system-main">
    <header className="system-topbar">
     <button className="sidebar-toggle" onClick={()=>setCollapsed(v=>!v)}>☰</button>
-    <Link href="/search" className="topbar-search"><span>⌕</span><span>ابحث عن مشروع، أمر عمل، موقع أو بند...</span><kbd>⌘ K</kbd></Link>
-    <div className="topbar-actions"><Link href="/alerts" className="topbar-icon">!</Link><Link href="/import" className="topbar-primary">استيراد ملف</Link></div>
+    <div className="topbar-spacer" />
+    <div className="topbar-actions"><Link href="/alerts" className="topbar-icon">!</Link><button type="button" className="topbar-refresh" onClick={refreshPage} disabled={refreshing}><span className={refreshing?"is-spinning":""}>↻</span>{refreshing?"جاري التحديث...":"تحديث البيانات"}</button></div>
    </header>
    <main className="system-content">{children}</main>
   </section>

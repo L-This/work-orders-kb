@@ -167,8 +167,6 @@ export default function Page() {
       </div>
       <div className="items-hero-actions">
         <button className="primary-action" type="button" onClick={() => setEditor({ mode: 'create' })}>+ بند جديد</button>
-        <a className="secondary-action" href="/import">استيراد جدول كميات</a>
-        <button className="secondary-action" type="button" onClick={() => void load()}>تحديث البيانات</button>
       </div>
     </section>
 

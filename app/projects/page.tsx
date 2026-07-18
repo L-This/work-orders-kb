@@ -326,8 +326,6 @@ export default function ProjectsPage() {
         </div>
         <div className="projects-hero-actions">
           <button className="btn project-create-button" type="button" onClick={openCreateProject}>+ مشروع جديد</button>
-          <button className="btn" onClick={() => void loadProjects()} disabled={loading}>{loading ? 'جاري التحديث...' : 'تحديث البيانات'}</button>
-          <Link href="/import" className="btn primary">استيراد مشروع</Link>
         </div>
       </section>
 
