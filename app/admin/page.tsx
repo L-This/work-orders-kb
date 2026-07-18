@@ -1,185 +1,32 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
-type BasicProject = { id: string; name: string; contractor_name?: string | null };
-type LinkRow = { work_orders_project_id: string; irrigation_project_id: string; irrigation_project_name: string | null; last_synced_at: string | null };
+type BasicProject={id:string;name:string;contractor_name?:string|null};
+type LinkRow={work_orders_project_id:string;irrigation_project_id:string;irrigation_project_name:string|null;last_synced_at:string|null};
+type SiteStats={total:number;synced:number;inactive:number};
+type Summary={sites:number;syncedSites:number;inactiveSites:number;failedImports:number};
+const emptySummary:Summary={sites:0,syncedSites:0,inactiveSites:0,failedImports:0};
+const syncAge=(value:string|null)=>value?Math.floor((Date.now()-new Date(value).getTime())/86400000):null;
 
-export default function Page() {
-  const [workProjects, setWorkProjects] = useState<BasicProject[]>([]);
-  const [irrigationProjects, setIrrigationProjects] = useState<BasicProject[]>([]);
-  const [links, setLinks] = useState<LinkRow[]>([]);
-  const [selections, setSelections] = useState<Record<string,string>>({});
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState('');
-  const [message, setMessage] = useState('');
-
-  useEffect(() => { void load(); }, []);
-
-  async function load() {
-    setLoading(true);
-    const response = await fetch('/api/irrigation/projects', { cache: 'no-store' });
-    const data = await response.json();
-    if (!response.ok) setMessage(data.error || 'تعذر تحميل بيانات الربط.');
-    else {
-      setWorkProjects(data.workProjects || []);
-      setIrrigationProjects(data.irrigationProjects || []);
-      setLinks(data.links || []);
-      const next: Record<string,string> = {};
-      for (const link of data.links || []) next[link.work_orders_project_id] = link.irrigation_project_id;
-      setSelections(next);
-    }
-    setLoading(false);
-  }
-
-  const linkMap = useMemo(() => new Map(links.map((link) => [link.work_orders_project_id, link])), [links]);
-
-async function saveAndSync(workProjectId: string) {
-  const irrigationProjectId = selections[workProjectId];
-
-  if (!irrigationProjectId) {
-    setMessage('اختر مشروع الري المقابل أولًا.');
-    return;
-  }
-
-  setBusyId(workProjectId);
-  setMessage('');
-
-  try {
-    const linkResponse = await fetch('/api/irrigation/link', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        workProjectId,
-        irrigationProjectId,
-      }),
-    });
-
-    const linkText = await linkResponse.text();
-
-    let linkData: {
-      error?: string;
-    } = {};
-
-    try {
-      linkData = linkText ? JSON.parse(linkText) : {};
-    } catch {
-      throw new Error(
-        `مسار حفظ الربط أعاد استجابة غير صحيحة (${linkResponse.status}).`,
-      );
-    }
-
-    if (!linkResponse.ok) {
-      throw new Error(
-        linkData.error || `تعذر حفظ الربط (${linkResponse.status}).`,
-      );
-    }
-
-    const syncResponse = await fetch('/api/irrigation/sync', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        workProjectId,
-      }),
-    });
-
-    const syncText = await syncResponse.text();
-
-    let syncData: {
-      error?: string;
-      synced?: number;
-    } = {};
-
-    try {
-      syncData = syncText ? JSON.parse(syncText) : {};
-    } catch {
-      throw new Error(
-        `مسار المزامنة أعاد استجابة غير صحيحة (${syncResponse.status}).`,
-      );
-    }
-
-    if (!syncResponse.ok) {
-      throw new Error(
-        syncData.error ||
-          `تم حفظ الربط، لكن تعذرت مزامنة المواقع (${syncResponse.status}).`,
-      );
-    }
-
-    await load();
-
-    setMessage(
-      `تم الربط ومزامنة ${syncData.synced ?? 0} موقع بنجاح.`,
-    );
-  } catch (error) {
-    console.error('Irrigation link/sync error:', error);
-
-    setMessage(
-      error instanceof Error
-        ? error.message
-        : 'حدث خطأ غير متوقع أثناء الربط والمزامنة.',
-    );
-  } finally {
-    setBusyId('');
-  }
+export default function AdminPage(){
+ const [workProjects,setWorkProjects]=useState<BasicProject[]>([]),[irrigationProjects,setIrrigationProjects]=useState<BasicProject[]>([]),[links,setLinks]=useState<LinkRow[]>([]),[siteStats,setSiteStats]=useState<Record<string,SiteStats>>({}),[summary,setSummary]=useState<Summary>(emptySummary);
+ const [selections,setSelections]=useState<Record<string,string>>({}),[loading,setLoading]=useState(true),[busyId,setBusyId]=useState(''),[message,setMessage]=useState(''),[messageTone,setMessageTone]=useState<'success'|'error'>('success'),[query,setQuery]=useState(''),[filter,setFilter]=useState<'all'|'linked'|'unlinked'|'stale'>('all');
+ useEffect(()=>{void load()},[]);
+ async function load(){setLoading(true);setMessage('');try{const response=await fetch('/api/irrigation/projects',{cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.error||'تعذر تحميل بيانات النظام.');setWorkProjects(data.workProjects||[]);setIrrigationProjects(data.irrigationProjects||[]);setLinks(data.links||[]);setSiteStats(data.projectSiteStats||{});setSummary(data.summary||emptySummary);const next:Record<string,string>={};for(const link of data.links||[])next[link.work_orders_project_id]=link.irrigation_project_id;setSelections(next)}catch(error){setMessageTone('error');setMessage(error instanceof Error?error.message:'تعذر تحميل بيانات النظام.')}finally{setLoading(false)}}
+ const linkMap=useMemo(()=>new Map(links.map(link=>[link.work_orders_project_id,link])),[links]);
+ const linkedCount=links.length,unlinkedCount=Math.max(0,workProjects.length-linkedCount),staleCount=links.filter(link=>syncAge(link.last_synced_at)===null||(syncAge(link.last_synced_at)??0)>1).length;
+ const healthScore=workProjects.length?Math.max(0,Math.round(((linkedCount-staleCount*.5)/workProjects.length)*100)):100;
+ const filtered=useMemo(()=>workProjects.filter(project=>{const link=linkMap.get(project.id),age=syncAge(link?.last_synced_at||null),term=query.trim().toLowerCase();const matches=!term||`${project.name} ${project.contractor_name||''} ${link?.irrigation_project_name||''}`.toLowerCase().includes(term);const state=filter==='all'||(filter==='linked'&&!!link)||(filter==='unlinked'&&!link)||(filter==='stale'&&!!link&&(age===null||age>1));return matches&&state}),[workProjects,linkMap,query,filter]);
+ async function saveAndSync(workProjectId:string){const irrigationProjectId=selections[workProjectId];if(!irrigationProjectId){setMessageTone('error');setMessage('اختر مشروع الري المقابل أولًا.');return}setBusyId(workProjectId);setMessage('');try{const linkResponse=await fetch('/api/irrigation/link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workProjectId,irrigationProjectId})});const linkData=await safeJson(linkResponse,'حفظ الربط');if(!linkResponse.ok)throw new Error(linkData.error||`تعذر حفظ الربط (${linkResponse.status}).`);const syncResponse=await fetch('/api/irrigation/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workProjectId})});const syncData=await safeJson(syncResponse,'مزامنة المواقع');if(!syncResponse.ok)throw new Error(syncData.error||`تم حفظ الربط، لكن تعذرت المزامنة (${syncResponse.status}).`);await load();setMessageTone('success');setMessage(`تم الربط ومزامنة ${syncData.synced??0} موقع بنجاح${syncData.deactivated?`، وتعطيل ${syncData.deactivated} موقع قديم`:''}.`)}catch(error){setMessageTone('error');setMessage(error instanceof Error?error.message:'حدث خطأ أثناء الربط والمزامنة.')}finally{setBusyId('')}}
+ return <main className="module-page system-admin-page">
+  <section className="admin-hero"><div><span className="eyebrow">التحكم والتكاملات</span><h1>إدارة النظام</h1><p>راقب صحة البيانات والاتصالات، وأدر ربط مشاريع الري ومزامنة المواقع من مركز واحد.</p><div className="admin-health-line"><i className={healthScore>=80?'good':healthScore>=50?'warning':'danger'}/><span>{loading?'جاري فحص النظام...':healthScore>=80?'النظام يعمل بصورة جيدة':healthScore>=50?'توجد عناصر تحتاج مراجعة':'توجد مشكلات ربط تحتاج تدخلك'}</span></div></div><div className="admin-health-score"><small>صحة التكامل</small><strong>{healthScore}%</strong><span>{linkedCount} من {workProjects.length} مشاريع مربوطة</span><button onClick={()=>void load()} disabled={loading}>{loading?'جاري الفحص...':'إعادة الفحص'}</button></div></section>
+  {message?<div className={`admin-message ${messageTone}`}>{message}</div>:null}
+  <section className="admin-stats"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}><small>مشاريع النظام</small><strong>{workProjects.length}</strong><span>{summary.sites} موقع مسجل</span></button><button className={filter==='linked'?'active success':''} onClick={()=>setFilter('linked')}><small>مشاريع مربوطة</small><strong>{linkedCount}</strong><span>{summary.syncedSites} موقع من نظام الري</span></button><button className={filter==='unlinked'?'active warning':''} onClick={()=>setFilter('unlinked')}><small>غير مربوطة</small><strong>{unlinkedCount}</strong><span>تحتاج اختيار المشروع المقابل</span></button><button className={filter==='stale'?'active danger':''} onClick={()=>setFilter('stale')}><small>مزامنة تحتاج تحديثًا</small><strong>{staleCount}</strong><span>لم تُزامن خلال آخر 24 ساعة</span></button><div><small>مؤشرات المراجعة</small><strong>{summary.failedImports+summary.inactiveSites}</strong><span>{summary.failedImports} استيراد · {summary.inactiveSites} موقع غير نشط</span></div></section>
+  <section className="admin-quick-grid"><Link href="/projects"><span>▦</span><div><strong>إدارة المشاريع</strong><small>إضافة وتعديل وأرشفة المشاريع</small></div></Link><Link href="/sites"><span>⌖</span><div><strong>إدارة المواقع</strong><small>مراجعة المواقع المتزامنة وحالاتها</small></div></Link><Link href="/import"><span>⇧</span><div><strong>استيراد Excel</strong><small>إضافة مشروع وبياناته التشغيلية</small></div></Link><Link href="/alerts"><span>!</span><div><strong>مركز التنبيهات</strong><small>متابعة الأخطاء والمواعيد الحرجة</small></div></Link></section>
+  <section className="admin-integration-panel"><header><div><span className="section-kicker">تكامل نظام الري</span><h2>ربط المشاريع ومزامنة المواقع</h2><p>المصدر: نظام الري والحدائق ← الوجهة: مرجع أوامر العمل والمواقع</p></div><b>{filtered.length} مشروع</b></header><div className="admin-integration-toolbar"><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="ابحث باسم المشروع أو المقاول أو مشروع الري..."/><button onClick={()=>{setQuery('');setFilter('all')}}>مسح الفلاتر</button></div>{loading?<div className="admin-loading"><span/><span/><span/></div>:<div className="admin-project-list">{filtered.map(project=>{const linked=linkMap.get(project.id),stats=siteStats[project.id]||{total:0,synced:0,inactive:0},age=syncAge(linked?.last_synced_at||null);return <article className={`admin-project-row ${linked?'is-linked':'is-unlinked'} ${linked&&(age===null||age>1)?'is-stale':''}`} key={project.id}><div className="admin-project-name"><span>{linked?'✓':'!'}</span><div><small>مشروع أوامر العمل</small><strong>{project.name}</strong><p>{project.contractor_name||'المقاول غير مسجل'}</p></div></div><label><small>المشروع المقابل في نظام الري</small><select value={selections[project.id]||''} onChange={event=>setSelections(current=>({...current,[project.id]:event.target.value}))}><option value="">اختر مشروع الري...</option>{irrigationProjects.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div className="admin-project-metrics"><span><small>المواقع</small><b>{stats.total}</b></span><span><small>متزامنة</small><b>{stats.synced}</b></span><span><small>غير نشطة</small><b>{stats.inactive}</b></span></div><div className="admin-project-action"><span className={linked?'state linked':'state'}>{linked?'مربوط':'غير مربوط'}</span><small>{linked?.last_synced_at?`آخر مزامنة: ${new Date(linked.last_synced_at).toLocaleString('ar-SA')}`:'لم تتم المزامنة بعد'}</small><button type="button" onClick={()=>void saveAndSync(project.id)} disabled={busyId===project.id}>{busyId===project.id?'جاري المزامنة...':linked?'حفظ ومزامنة':'ربط ومزامنة'}</button></div></article>})}{!filtered.length?<div className="admin-empty">لا توجد مشاريع مطابقة للفلاتر الحالية.</div>:null}</div>}</section>
+ </main>
 }
 
-  return <div className="module-page irrigation-link-page">
-    <div className="module-heading">
-      <span className="eyebrow">إدارة النظام</span>
-      <h1>ربط مواقع مشروع الري</h1>
-      <p>طابق كل مشروع في مرجع أوامر العمل مع مشروعه المقابل في نظام الري، ثم نفّذ المزامنة.</p>
-    </div>
-
-    {message ? <div className="integration-message">{message}</div> : null}
-
-    <section className="integration-panel">
-      <div className="integration-panel-head">
-        <div><small>المصدر</small><strong>garden-irrigation-system / gardens</strong></div>
-        <div><small>الوجهة</small><strong>work-orders-db / sites</strong></div>
-      </div>
-      {loading ? <div className="module-empty">جاري تحميل المشاريع...</div> : (
-        <div className="integration-project-list">
-          {workProjects.map((project) => {
-  const linked = linkMap.get(project.id);
-
-  console.log(
-  'PROJECT LINK CHECK:',
-  project.id,
-  project.name,
-  linked?.work_orders_project_id ?? 'NO LINK',
-  linked?.irrigation_project_name ?? 'NO IRRIGATION PROJECT',
-);
-
-  return ( <article className="integration-project-row" key={project.id}>
-              <div className="integration-work-project">
-                <small>مشروع أوامر العمل</small>
-                <strong>{project.name}</strong>
-                <span>{project.contractor_name || 'المقاول غير مسجل'}</span>
-              </div>
-              <div className="integration-arrow">←</div>
-              <label>
-                <small>المشروع المقابل في نظام الري</small>
-                <select value={selections[project.id] || ''} onChange={(event) => setSelections((current) => ({ ...current, [project.id]: event.target.value }))}>
-                  <option value="">اختر مشروع الري...</option>
-                  {irrigationProjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                </select>
-              </label>
-              <div className="integration-action">
-                <span className={linked ? 'linked-state yes' : 'linked-state'}>{linked ? 'مربوط' : 'غير مربوط'}</span>
-                {linked?.last_synced_at ? <small>آخر مزامنة: {new Date(linked.last_synced_at).toLocaleString('ar-SA')}</small> : null}
-                <button type="button" onClick={() => void saveAndSync(project.id)} disabled={busyId === project.id}>
-                  {busyId === project.id ? 'جاري المزامنة...' : linked ? 'حفظ ومزامنة' : 'ربط ومزامنة'}
-                </button>
-              </div>
-            </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  </div>;
-}
+async function safeJson(response:Response,operation:string):Promise<{error?:string;synced?:number;deactivated?:number}>{const text=await response.text();try{return text?JSON.parse(text):{}}catch{throw new Error(`مسار ${operation} أعاد استجابة غير صحيحة (${response.status}).`)}}
