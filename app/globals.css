@@ -1442,6 +1442,7 @@ body{margin:0;background:var(--shell-bg)}
 .project-delete-warning{margin:0 22px 20px;padding:17px;border:1px solid #e5b4a6;border-radius:16px;background:#fff1ec;color:#8d3b29}
 .project-delete-warning.safe{border-color:#b9dbc8;background:#eef9f2;color:#176044}
 .project-delete-warning p{margin:6px 0 0;line-height:1.8}
+.project-delete-confirm{display:flex;align-items:center;gap:11px;margin:0 22px 20px;padding:14px 16px;border:1px solid #e7d4ac;border-radius:14px;background:#fff;color:#5f625f;font-weight:800;cursor:pointer}.project-delete-confirm input{width:20px;height:20px;accent-color:#a83f2c;cursor:pointer}.project-delete-confirm:has(input:checked){border-color:#d78f81;background:#fff5f2;color:#8d3b29}
 .danger-text{color:#b44c36!important}.danger-button{background:#a83f2c!important;color:white!important;border-color:#a83f2c!important}
 .project-stats-modal .project-editor-actions,.project-delete-modal .project-editor-actions{padding:0 22px 22px}
 @media(max-width:700px){.project-stats-grid,.project-delete-counts{grid-template-columns:1fr 1fr}.project-editor-tabs{grid-template-columns:1fr}.project-card-actions-four{grid-template-columns:1fr 1fr}}

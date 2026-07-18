@@ -127,6 +127,7 @@ export default function ProjectsPage() {
   const [editorTab, setEditorTab] = useState<'basic' | 'contract'>('basic');
   const [statsProject, setStatsProject] = useState<ProjectSummary | null>(null);
   const [deleteProject, setDeleteProject] = useState<ProjectSummary | null>(null);
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
 
   useEffect(() => { void loadProjects(); }, []);
 
@@ -244,8 +245,9 @@ export default function ProjectsPage() {
       const response = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'تعذر حذف المشروع.');
-      setMessage('تم نقل المشروع إلى سلة المحذوفات.');
+      setMessage(`تم حذف المشروع نهائيًا مع جميع بياناته المرتبطة${data.removed ? ` (${data.removed.workOrders || 0} أمر عمل، ${data.removed.sites || 0} موقع)` : ''}.`);
       setDeleteProject(null);
+      setDeleteConfirmed(false);
       await loadProjects();
     } catch (actionError) {
       setMessage(actionError instanceof Error ? actionError.message : 'تعذر حذف المشروع.');
@@ -394,7 +396,7 @@ export default function ProjectsPage() {
                     <button type="button" onClick={() => { setStatsProject(project); setMenuProjectId(''); }}><ProjectMenuIcon name="stats" /><span>إحصائيات المشروع</span></button>
                     <button type="button" onClick={() => void archiveProject(project)} disabled={actionProjectId === project.id}><ProjectMenuIcon name={project.status === 'archived' ? 'restore' : 'archive'} /><span>{project.status === 'archived' ? 'إعادة التنشيط' : 'أرشفة المشروع'}</span></button>
                     <div className="project-action-separator" aria-hidden="true" />
-                    <button type="button" className="danger" onClick={() => { setDeleteProject(project); setMenuProjectId(''); }} disabled={actionProjectId === project.id}><ProjectMenuIcon name="trash" /><span>حذف المشروع</span></button>
+                    <button type="button" className="danger" onClick={() => { setDeleteProject(project); setDeleteConfirmed(false); setMenuProjectId(''); }} disabled={actionProjectId === project.id}><ProjectMenuIcon name="trash" /><span>حذف المشروع</span></button>
                   </div> : null}
                 </div>
               </div>
@@ -547,11 +549,12 @@ export default function ProjectsPage() {
         <section className="project-delete-modal" role="dialog" aria-modal="true" aria-label="حذف المشروع">
           <div className="project-editor-head"><div><span className="eyebrow danger-text">إجراء حساس</span><h2>حذف المشروع</h2><p>{deleteProject.name}</p></div><button type="button" onClick={() => setDeleteProject(null)} disabled={!!actionProjectId}>×</button></div>
           <div className="project-delete-counts"><article><strong>{deleteProject.sitesCount}</strong><span>موقع</span></article><article><strong>{deleteProject.ordersCount}</strong><span>أمر عمل</span></article><article><strong>{deleteProject.itemsCount}</strong><span>بند عقد</span></article></div>
-          {(deleteProject.sitesCount + deleteProject.ordersCount + deleteProject.itemsCount) > 0 ? <div className="project-delete-warning"><b>الحذف غير متاح حاليًا</b><p>المشروع مرتبط ببيانات تشغيلية. استخدم الأرشفة للحفاظ على السجل ومنع ظهوره ضمن المشاريع النشطة.</p></div> : <div className="project-delete-warning safe"><b>يمكن نقل المشروع إلى سلة المحذوفات</b><p>لا توجد مواقع أو بنود أو أوامر عمل مرتبطة به.</p></div>}
+          <div className="project-delete-warning"><b>حذف نهائي وشامل</b><p>سيتم حذف المشروع وجميع أوامر العمل والمواقع وبنود العقد وسجلات الاستيراد المرتبطة به. لا يمكن التراجع عن هذه العملية.</p></div>
+          <label className="project-delete-confirm"><input type="checkbox" checked={deleteConfirmed} onChange={(event) => setDeleteConfirmed(event.target.checked)} disabled={!!actionProjectId}/><span>أفهم أن جميع بيانات المشروع المرتبطة ستُحذف نهائيًا.</span></label>
           <div className="project-editor-actions">
             <button type="button" className="btn" onClick={() => setDeleteProject(null)} disabled={!!actionProjectId}>إلغاء</button>
             <button type="button" className="btn" onClick={() => { void archiveProject(deleteProject); setDeleteProject(null); }} disabled={!!actionProjectId}>{deleteProject.status === 'archived' ? 'إعادة التنشيط' : 'أرشفة المشروع'}</button>
-            <button type="button" className="btn danger-button" onClick={() => void trashProject(deleteProject)} disabled={!!actionProjectId || (deleteProject.sitesCount + deleteProject.ordersCount + deleteProject.itemsCount) > 0}>{actionProjectId ? 'جاري التنفيذ...' : 'نقل إلى السلة'}</button>
+            <button type="button" className="btn danger-button" onClick={() => void trashProject(deleteProject)} disabled={!!actionProjectId || !deleteConfirmed}>{actionProjectId ? 'جاري الحذف...' : 'حذف المشروع وكل بياناته'}</button>
           </div>
         </section>
       </div> : null}

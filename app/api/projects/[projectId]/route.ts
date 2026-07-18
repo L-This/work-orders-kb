@@ -48,39 +48,45 @@ export async function PATCH(request: NextRequest, { params }: Context) {
 export async function DELETE(_request: NextRequest, { params }: Context) {
   try {
     const work = createWorkOrdersAdminClient();
-    const [orders, sites, items] = await Promise.all([
-      work.from('work_orders').select('id', { count: 'exact', head: true }).eq('project_id', params.projectId),
-      work.from('sites').select('id', { count: 'exact', head: true }).eq('project_id', params.projectId),
-      work.from('project_boq_items').select('id', { count: 'exact', head: true }).eq('project_id', params.projectId),
-    ]);
-    const firstError = orders.error || sites.error || items.error;
-    if (firstError) throw firstError;
-
-    const dependencies = {
-      workOrders: orders.count || 0,
-      sites: sites.count || 0,
-      items: items.count || 0,
-    };
-    if (dependencies.workOrders || dependencies.sites || dependencies.items) {
-      return NextResponse.json({
-        error: 'لا يمكن نقل المشروع إلى سلة المحذوفات لوجود بيانات مرتبطة به. استخدم الأرشفة بدلًا من الحذف.',
-        dependencies,
-      }, { status: 409 });
-    }
-
-    const current = await work.from('projects').select('status').eq('id', params.projectId).maybeSingle();
+    const current = await work.from('projects').select('id').eq('id', params.projectId).maybeSingle();
     if (current.error) throw current.error;
     if (!current.data) return NextResponse.json({ error: 'المشروع غير موجود.' }, { status: 404 });
 
-    const now = new Date().toISOString();
-    const result = await work.from('projects').update({
-      deleted_at: now,
-      deleted_from_status: current.data.status || 'active',
-      status: 'deleted',
-      updated_at: now,
-    }).eq('id', params.projectId).select('id').single();
-    if (result.error) throw result.error;
-    return NextResponse.json({ deleted: true });
+    const [orders, sites, batches] = await Promise.all([
+      work.from('work_orders').select('id').eq('project_id', params.projectId),
+      work.from('sites').select('id').eq('project_id', params.projectId),
+      work.from('import_batches').select('id').eq('project_id', params.projectId),
+    ]);
+    const firstError = orders.error || sites.error || batches.error;
+    if (firstError) throw firstError;
+
+    const orderIds = (orders.data || []).map((row) => row.id);
+    const siteIds = (sites.data || []).map((row) => row.id);
+    const batchIds = (batches.data || []).map((row) => row.id);
+
+    async function remove(table: string, column: string, ids: string[]) {
+      if (!ids.length) return;
+      const result = await work.from(table).delete().in(column, ids);
+      if (result.error) throw result.error;
+    }
+
+    await remove('attachments', 'work_order_id', orderIds);
+    await remove('work_order_items', 'work_order_id', orderIds);
+    await remove('work_order_sites', 'work_order_id', orderIds);
+    await remove('work_order_sites', 'site_id', siteIds);
+    await remove('site_notes', 'site_id', siteIds);
+    await remove('site_profiles', 'site_id', siteIds);
+    await remove('raw_excel_rows', 'import_batch_id', batchIds);
+
+    for (const table of ['project_irrigation_links', 'project_boq_items', 'work_orders', 'sites', 'contracts', 'import_batches'] as const) {
+      const column = table === 'project_irrigation_links' ? 'work_orders_project_id' : 'project_id';
+      const result = await work.from(table).delete().eq(column, params.projectId);
+      if (result.error) throw result.error;
+    }
+
+    const deleted = await work.from('projects').delete().eq('id', params.projectId).select('id').single();
+    if (deleted.error) throw deleted.error;
+    return NextResponse.json({ deleted: true, removed: { workOrders: orderIds.length, sites: siteIds.length, importBatches: batchIds.length } });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error, 'تعذر حذف المشروع.') }, { status: 500 });
   }
