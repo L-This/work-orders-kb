@@ -55,23 +55,21 @@ export async function DELETE(_request: NextRequest, { params }: Context) {
   try {
     const work = createWorkOrdersAdminClient();
 
-    const [items, attachments] = await Promise.all([
-      work.from('work_order_items').select('id,executed_quantity').eq('work_order_id', params.workOrderId),
-      work.from('attachments').select('id', { count: 'exact', head: true }).eq('work_order_id', params.workOrderId),
+    const [order, items, sites, attachments] = await Promise.all([
+      work.from('work_orders').select('id').eq('id', params.workOrderId).maybeSingle(),
+      work.from('work_order_items').select('id').eq('work_order_id', params.workOrderId),
+      work.from('work_order_sites').select('id').eq('work_order_id', params.workOrderId),
+      work.from('attachments').select('id').eq('work_order_id', params.workOrderId),
     ]);
 
-    if (items.error || attachments.error) throw items.error || attachments.error;
+    const firstError = order.error || items.error || sites.error || attachments.error;
+    if (firstError) throw firstError;
+    if (!order.data) return NextResponse.json({ error: 'أمر العمل غير موجود.' }, { status: 404 });
 
-    const executedRows = (items.data || []).filter((row) => Number(row.executed_quantity) > 0).length;
-    const attachmentCount = attachments.count || 0;
-
-    if (executedRows || attachmentCount) {
-      return NextResponse.json({
-        error: 'لا يمكن حذف أمر العمل لوجود تنفيذ فعلي أو مرفقات مرتبطة به. استخدم الإلغاء بدلًا من الحذف.',
-        dependencies: { executedRows, attachments: attachmentCount },
-      }, { status: 409 });
-    }
-
+    // Only the order-owned records are removed. Projects, sites and the shared
+    // item catalogue remain untouched.
+    const attachmentsDelete = await work.from('attachments').delete().eq('work_order_id', params.workOrderId);
+    if (attachmentsDelete.error) throw attachmentsDelete.error;
     const sitesDelete = await work.from('work_order_sites').delete().eq('work_order_id', params.workOrderId);
     if (sitesDelete.error) throw sitesDelete.error;
     const itemsDelete = await work.from('work_order_items').delete().eq('work_order_id', params.workOrderId);
@@ -79,7 +77,14 @@ export async function DELETE(_request: NextRequest, { params }: Context) {
     const orderDelete = await work.from('work_orders').delete().eq('id', params.workOrderId);
     if (orderDelete.error) throw orderDelete.error;
 
-    return NextResponse.json({ deleted: true });
+    return NextResponse.json({
+      deleted: true,
+      removed: {
+        itemRows: (items.data || []).length,
+        siteLinks: (sites.data || []).length,
+        attachments: (attachments.data || []).length,
+      },
+    });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error, 'تعذر حذف أمر العمل.') }, { status: 500 });
   }

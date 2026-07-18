@@ -244,7 +244,7 @@ export default function OrdersPage() {
       const response = await fetch(`/api/work-orders/${deleteOrder.id}`, { method: 'DELETE' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'تعذر حذف أمر العمل.');
-      setSuccessMessage(`تم حذف أمر العمل رقم ${deleteOrder.work_order_number}.`);
+      setSuccessMessage(`تم حذف أمر العمل رقم ${deleteOrder.work_order_number} وبياناته التابعة دون التأثير على المشروع أو المواقع أو البنود الأساسية.`);
       setDeleteOrder(null);
       await load();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'تعذر حذف أمر العمل.'); }
@@ -371,7 +371,7 @@ export default function OrdersPage() {
 
       {deleteOrder ? <div className="order-modal-backdrop" onMouseDown={() => !saving && setDeleteOrder(null)}>
         <section className="order-delete-modal" onMouseDown={(event) => event.stopPropagation()}>
-          <span className="delete-icon">!</span><h2>حذف أمر العمل رقم {deleteOrder.work_order_number}؟</h2><p>سيُحذف الأمر ونطاق المواقع والبنود المحجوزة التابعة له. يمنع النظام الحذف تلقائيًا إذا وُجد تنفيذ فعلي أو مرفقات.</p>
+          <span className="delete-icon">!</span><h2>حذف أمر العمل رقم {deleteOrder.work_order_number}؟</h2><p>سيُحذف أمر العمل نهائيًا مع سجلات بنوده وروابط المواقع والمرفقات التابعة له. لن يُحذف المشروع أو المواقع أو البنود الأساسية المشتركة.</p>
           <div className="delete-order-summary"><span><small>المواقع</small><b>{deleteOrder.sitesCount}</b></span><span><small>البنود</small><b>{deleteOrder.itemsCount}</b></span><span><small>الحالة</small><b>{statusLabel(deleteOrder.status)}</b></span></div>
           <footer><button className="btn danger-btn" onClick={() => void confirmDelete()} disabled={saving}>{saving ? 'جاري الحذف...' : 'تأكيد الحذف'}</button><button className="btn" onClick={() => setDeleteOrder(null)} disabled={saving}>تراجع</button></footer>
         </section>
