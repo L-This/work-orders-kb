@@ -11,7 +11,7 @@ export async function GET() {
   try {
     const work = createWorkOrdersAdminClient();
     const [sites, projects, summary] = await Promise.all([
-      work.from('sites').select('id,project_id,name,site_code,area_name,status,created_at,updated_at,source_system,source_code,source_district,synced_at').order('name'),
+      work.from('sites').select('id,project_id,name,site_code,area_name,status,created_at,updated_at,source_system,source_site_id,source_project_id,source_code,source_district,synced_at').order('name'),
       work.from('projects').select('id,name,municipality').neq('status','deleted').order('name'),
       work.from('v_site_decision_summary').select('site_id,work_orders_count,items_count,total_remaining_quantity,last_work_order_date'),
     ]);
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const work = createWorkOrdersAdminClient();
     const duplicate = await work.from('sites').select('id').eq('project_id',projectId).eq('name',name).maybeSingle();
     if (duplicate.error) throw duplicate.error; if (duplicate.data) return NextResponse.json({error:'يوجد موقع بالاسم نفسه داخل المشروع.'},{status:409});
-    const result = await work.from('sites').insert({project_id:projectId,name,normalized_name:normalizeArabic(name),site_code:clean(body.site_code),area_name:clean(body.area_name),status:clean(body.status)||'active'}).select('id,project_id,name,site_code,area_name,status,created_at,updated_at,source_system,source_code,source_district,synced_at').single();
+    const result = await work.from('sites').insert({project_id:projectId,name,normalized_name:normalizeArabic(name),site_code:clean(body.site_code),area_name:clean(body.area_name),status:clean(body.status)||'active'}).select('id,project_id,name,site_code,area_name,status,created_at,updated_at,source_system,source_site_id,source_project_id,source_code,source_district,synced_at').single();
     if (result.error) throw result.error; return NextResponse.json({site:result.data},{status:201});
   } catch (error) { return NextResponse.json({error:message(error,'تعذر إنشاء الموقع.')},{status:500}); }
 }
