@@ -233,10 +233,10 @@ export function parseWorkOrdersMatrixWorkbook(buffer: ArrayBuffer): SmartWorkboo
   const boqHeader = findText(rows, 'الرقم التسلسلي');
   if (!boqHeader) throw new Error('لم يتم العثور على رأس جدول الكميات (الرقم التسلسلي).');
 
+  // Import is intentionally limited to the project and its BOQ. Work-order
+  // details are entered and reviewed manually in the import screen.
   const orderTitleCell = findText(rows, 'أمر عمل رقم');
-  if (!orderTitleCell) throw new Error('لم يتم العثور على أعمدة أوامر العمل في الملف.');
-  const orderColumns = detectOrderColumns(rows, orderTitleCell.row);
-  if (!orderColumns.length) throw new Error('تعذر تحديد أرقام أوامر العمل من الملف.');
+  const orderColumns = orderTitleCell ? detectOrderColumns(rows, orderTitleCell.row) : [];
 
   const projectFields = detectProjectFields(rows);
   const boqColumns = detectBoqColumns(rows, boqHeader.row);
@@ -252,9 +252,9 @@ export function parseWorkOrdersMatrixWorkbook(buffer: ArrayBuffer): SmartWorkboo
   }));
 
   const workOrders: ParsedWorkOrder[] = [];
-  const dateRow = orderTitleCell.row + 2;
+  const dateRow = (orderTitleCell?.row || 0) + 2;
   const siteRow = boqHeader.row + 1;
-  for (const orderColumn of orderColumns) {
+  for (const orderColumn of [] as OrderColumn[]) {
     const col = orderColumn.col;
     const start = excelDateToISO(cell(rows, dateRow, col));
     const end = excelDateToISO(cell(rows, dateRow, col + 1));
@@ -288,21 +288,13 @@ export function parseWorkOrdersMatrixWorkbook(buffer: ArrayBuffer): SmartWorkboo
     });
   }
 
-  const sites = uniqueByNormalized(workOrders.flatMap(order => order.sites));
+  const sites: string[] = [];
   const warnings: string[] = [];
-  if (!sites.length) warnings.push('لم يتم العثور على أسماء مواقع مرتبطة بأوامر العمل.');
-  if (!workOrders.length) warnings.push('لم يتم العثور على أوامر عمل فعلية قابلة للاستيراد.');
   const emptyUnits = boqItems.filter(item => !item.unit).length;
   if (emptyUnits) warnings.push(`${emptyUnits} بند بدون وحدة قياس.`);
   const emptyQty = boqItems.filter(item => item.contractQuantity === 0).length;
   if (emptyQty) warnings.push(`${emptyQty} بند بكمية عقد صفرية؛ سيتم استيراده للمراجعة.`);
-  const blankDates = workOrders.filter(order => !order.startDate).length;
-  if (blankDates) warnings.push(`${blankDates} أمر عمل يحتوي بيانات فعلية بدون تاريخ بدء.`);
-  const duplicateOrderNumbers = workOrders.length - new Set(workOrders.map(order => order.number)).size;
-  if (duplicateOrderNumbers) warnings.push('تم العثور على أرقام أوامر عمل مكررة داخل الملف.');
-  if (findText(rows, 'تخفيض العقد') || findText(rows, 'زيادة المشروع')) {
-    warnings.push('تم اكتشاف أعمدة تخفيض/زيادة للعقد. تُحفظ حاليًا كمية العقد الأساسية، ويمكن إضافة سجل مستقل للتعديلات عند الحاجة.');
-  }
+  if (orderColumns.length) warnings.push('تم تجاهل أعمدة أوامر العمل في الملف؛ أدخل أوامر العمل يدويًا في شاشة المراجعة.');
 
   return {
     parser: 'work-orders-matrix-v2',
