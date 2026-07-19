@@ -6,6 +6,8 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 type Project = { id: string; name: string; contractor_name: string | null };
 type Site = { id: string; name: string };
+type IrrigationProject = { id: string; name: string; sites: Array<{ id: string; name: string }> };
+type IrrigationLink = { work_orders_project_id: string; irrigation_project_id: string };
 type Contract = { id: string; contract_number: string | null };
 type BoqItem = {
   id: string;
@@ -85,6 +87,10 @@ function nextOrderNumber(numbers: string[]) {
 export default function NewWorkOrderPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
+  const [irrigationProjectId, setIrrigationProjectId] = useState('');
+  const [irrigationProjects, setIrrigationProjects] = useState<IrrigationProject[]>([]);
+  const [irrigationLinks, setIrrigationLinks] = useState<IrrigationLink[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [contractId, setContractId] = useState<string | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [siteQuery, setSiteQuery] = useState('');
@@ -150,6 +156,7 @@ export default function NewWorkOrderPage() {
       setSelectedItems([]);
       setSelectedSiteIds([]);
       setContractId(null);
+      setIrrigationProjectId('');
       setOrderNumber('01');
       setLastOrderNumber('لا يوجد');
       setItemBalances(new Map());
@@ -166,9 +173,19 @@ export default function NewWorkOrderPage() {
       setMessage('إعدادات Supabase غير مكتملة.');
       return;
     }
-    const result = await supabase.from('projects').select('id,name,contractor_name').order('name');
+    const [result, catalogResponse, linksResponse] = await Promise.all([
+      supabase.from('projects').select('id,name,contractor_name').order('name'),
+      fetch(`/api/irrigation/catalog?t=${Date.now()}`, { cache: 'no-store' }),
+      fetch(`/api/irrigation/projects?t=${Date.now()}`, { cache: 'no-store' }),
+    ]);
+    const catalogData = await catalogResponse.json().catch(() => ({}));
+    const linksData = await linksResponse.json().catch(() => ({}));
     if (result.error) setMessage(result.error.message);
     else setProjects((result.data || []) as Project[]);
+    if (catalogResponse.ok) setIrrigationProjects((catalogData.projects || []) as IrrigationProject[]);
+    else setMessage(catalogData.error || 'تعذر جلب مشاريع الري ومواقعها.');
+    if (linksResponse.ok) setIrrigationLinks((linksData.links || []) as IrrigationLink[]);
+    setCatalogLoading(false);
     setLoading(false);
   }
 
@@ -182,16 +199,14 @@ export default function NewWorkOrderPage() {
     setItemToAdd('');
     setDraftQuantity('');
 
-    // مزامنة مواقع مشروع الري أولًا، ثم قراءة المعرّفات المحلية من جدول sites.
-    // إذا لم يكن المشروع مربوطًا بعد، تستمر الشاشة وتعرض المواقع المحلية الموجودة فقط.
-    try {
-      await fetch('/api/irrigation/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workProjectId: id }),
-      });
-    } catch {
-      // لا نوقف إنشاء أمر العمل عند تعذر الاتصال المؤقت بقاعدة الري.
+    const existingLink = irrigationLinks.find((link) => link.work_orders_project_id === id);
+    setIrrigationProjectId(existingLink?.irrigation_project_id || '');
+    if (existingLink) {
+      try {
+        await syncIrrigationSites(id, existingLink.irrigation_project_id, false);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'تعذر مزامنة مواقع مشروع الري.');
+      }
     }
 
     const [sitesResult, boqResult, ordersResult, contractsResult] = await Promise.all([
@@ -235,6 +250,53 @@ export default function NewWorkOrderPage() {
     }
 
     setProjectLoading(false);
+  }
+
+  async function syncIrrigationSites(workProjectId: string, sourceProjectId: string, showMessage = true) {
+    if (!workProjectId || !sourceProjectId) return;
+    const sourceProject = irrigationProjects.find((project) => project.id === sourceProjectId);
+    const linkResponse = await fetch('/api/irrigation/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workProjectId,
+        irrigationProjectId: sourceProjectId,
+        irrigationProjectName: sourceProject?.name || '',
+      }),
+    });
+    const linkData = await linkResponse.json().catch(() => ({}));
+    if (!linkResponse.ok) throw new Error(linkData.error || 'تعذر ربط مشروع الري.');
+    const syncResponse = await fetch('/api/irrigation/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workProjectId }),
+    });
+    const syncData = await syncResponse.json().catch(() => ({}));
+    if (!syncResponse.ok) throw new Error(syncData.error || 'تعذر مزامنة مواقع مشروع الري.');
+    setIrrigationLinks((current) => [
+      ...current.filter((link) => link.work_orders_project_id !== workProjectId),
+      { work_orders_project_id: workProjectId, irrigation_project_id: sourceProjectId },
+    ]);
+    if (showMessage) setMessage(`تم جلب ${Number(syncData.synced || sourceProject?.sites.length || 0)} موقع من مشروع الري.`);
+  }
+
+  async function chooseIrrigationProject(sourceProjectId: string) {
+    setIrrigationProjectId(sourceProjectId);
+    setSites([]);
+    setSelectedSiteIds([]);
+    if (!projectId || !sourceProjectId) return;
+    setProjectLoading(true);
+    setMessage('');
+    try {
+      await syncIrrigationSites(projectId, sourceProjectId);
+      const result = await supabase.from('sites').select('id,name').eq('project_id', projectId).eq('status', 'active').order('name');
+      if (result.error) throw result.error;
+      setSites((result.data || []) as Site[]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'تعذر جلب مواقع مشروع الري.');
+    } finally {
+      setProjectLoading(false);
+    }
   }
 
   function buildBalances(lines: ExistingLine[]) {
@@ -306,6 +368,7 @@ export default function NewWorkOrderPage() {
 
   const validation = useMemo(() => {
     if (!projectId) return 'اختر المشروع.';
+    if (!irrigationProjectId) return 'اختر مشروع الري لجلب المواقع.';
     if (!orderNumber.trim()) return 'رقم أمر العمل غير متوفر.';
     if (!selectedSiteIds.length) return 'اختر موقعًا واحدًا على الأقل.';
     if (!startDate) return 'حدد تاريخ بداية أمر العمل.';
@@ -317,7 +380,7 @@ export default function NewWorkOrderPage() {
       if (quantity > item.availableBefore) return `الكمية المطلوبة للبند «${item.name}» أكبر من الرصيد الحقيقي المتاح.`;
     }
     return '';
-  }, [duration, orderNumber, projectId, selectedItems, selectedSiteIds.length, startDate]);
+  }, [duration, irrigationProjectId, orderNumber, projectId, selectedItems, selectedSiteIds.length, startDate]);
 
   async function createWorkOrder() {
     if (validation || !selectedProject) {
@@ -468,6 +531,23 @@ export default function NewWorkOrderPage() {
             </div>
           </div>
         ) : null}
+
+        {projectId ? (
+          <label className="create-irrigation-project-choice">
+            <span>مشروع الري المرتبط بالمواقع</span>
+            <select
+              value={irrigationProjectId}
+              onChange={(event) => void chooseIrrigationProject(event.target.value)}
+              disabled={catalogLoading || projectLoading}
+            >
+              <option value="">{catalogLoading ? 'جاري جلب مشاريع الري...' : 'اختر مشروع الري...'}</option>
+              {irrigationProjects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name} — {project.sites.length} موقع</option>
+              ))}
+            </select>
+            <small>بعد الاختيار يتم الربط والمزامنة تلقائيًا، ثم تظهر المواقع في الخطوة التالية.</small>
+          </label>
+        ) : null}
       </section>
 
       <section className="create-order-step section-block">
@@ -481,7 +561,7 @@ export default function NewWorkOrderPage() {
             ) : null}
           </div>
         </div>
-        {!projectId ? <div className="empty compact">اختر المشروع أولًا لعرض المواقع.</div> : projectLoading ? <div className="empty compact">جاري تحميل مواقع المشروع...</div> : (
+        {!projectId ? <div className="empty compact">اختر المشروع أولًا.</div> : !irrigationProjectId ? <div className="empty compact">اختر مشروع الري أعلاه ليتم جلب مواقعه تلقائيًا.</div> : projectLoading ? <div className="empty compact">جاري ربط مشروع الري وجلب المواقع...</div> : (
           <div className="site-picker-panel">
             <div className="site-picker-toolbar">
               <button className="btn" type="button" onClick={selectVisibleSites} disabled={!visibleSites.length}>تحديد الظاهر</button>
