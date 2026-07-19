@@ -27,15 +27,6 @@ type WorkOrder = {
   projects: { name: string } | null;
 };
 
-type ImportBatch = {
-  id: string;
-  file_name: string;
-  import_status: string;
-  imported_rows_count: number | null;
-  error_rows_count: number | null;
-  created_at: string;
-};
-
 type GeneralItem = {
   item_id: string;
   item_name: string;
@@ -99,11 +90,9 @@ function compactProjectName(name: string) {
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [recentOrders, setRecentOrders] = useState<WorkOrder[]>([]);
-  const [recentImports, setRecentImports] = useState<ImportBatch[]>([]);
   const [items, setItems] = useState<GeneralItem[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
   const [counts, setCounts] = useState<DashboardCounts>(initialCounts);
-  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -126,11 +115,10 @@ export default function Home() {
       ordersCountResult,
       itemsCountResult,
       ordersResult,
-      importsResult,
       itemResult,
       siteResult,
     ] = await Promise.all([
-      supabase.from('projects').select('*', { count: 'exact' }).order('created_at', { ascending: false }),
+      supabase.from('projects').select('*', { count: 'exact' }).is('deleted_at', null).or('status.is.null,status.neq.deleted').order('created_at', { ascending: false }),
       supabase.from('sites').select('id', { count: 'exact', head: true }),
       supabase.from('work_orders').select('id', { count: 'exact', head: true }),
       supabase.from('items').select('id', { count: 'exact', head: true }),
@@ -138,12 +126,7 @@ export default function Home() {
         .from('work_orders')
         .select('id,project_id,work_order_number,work_order_date,title,status,work_order_end_date,duration_days,projects(name)')
         .order('work_order_date', { ascending: false, nullsFirst: false })
-        .limit(6),
-      supabase
-        .from('import_batches')
-        .select('id,file_name,import_status,imported_rows_count,error_rows_count,created_at')
-        .order('created_at', { ascending: false })
-        .limit(5),
+        .limit(1000),
       supabase
         .from('v_general_item_search')
         .select('*')
@@ -162,7 +145,6 @@ export default function Home() {
       ordersCountResult.error,
       itemsCountResult.error,
       ordersResult.error,
-      importsResult.error,
       itemResult.error,
       siteResult.error,
     ].find(Boolean);
@@ -178,7 +160,6 @@ export default function Home() {
       items: itemsCountResult.count ?? 0,
     });
     setRecentOrders((ordersResult.data || []) as unknown as WorkOrder[]);
-    setRecentImports((importsResult.data || []) as ImportBatch[]);
     setItems((itemResult.data || []) as GeneralItem[]);
     setSites((siteResult.data || []) as SiteSummary[]);
     setLoading(false);
@@ -218,11 +199,14 @@ export default function Home() {
       <section className="dashboard-welcome">
         <div>
           <span className="eyebrow">لوحة القيادة</span>
-          <h1>نظرة تشغيلية على منظومة أوامر العمل</h1>
-          <p>ملخص مباشر للمشاريع، أوامر العمل، المواعيد والتنبيهات التي تحتاج متابعة.</p>
+          <h1>مركز القرار التشغيلي</h1>
+          <p>ابدأ بما يحتاج تدخلك الآن، ثم انتقل مباشرة إلى المشروع أو أمر العمل أو الموقع.</p>
         </div>
-        <div className="dashboard-welcome-actions">
-          <Link className="btn primary" href="/projects">فتح المشاريع</Link>
+        <div className="dashboard-focus-card">
+          <small>الأولوية الحالية</small>
+          <strong>{alerts.length}</strong>
+          <span>{alerts.length === 1 ? 'أمر يحتاج متابعة زمنية' : 'أوامر تحتاج متابعة زمنية'}</span>
+          <Link href="/alerts">فتح مركز التنبيهات</Link>
         </div>
       </section>
 
@@ -230,7 +214,7 @@ export default function Home() {
         <Link href="/projects" className="dashboard-kpi"><small>المشاريع</small><strong>{counts.projects}</strong><span>مشروع مسجل</span></Link>
         <Link href="/sites" className="dashboard-kpi"><small>المواقع</small><strong>{counts.sites}</strong><span>موقع مرتبط بالمشاريع</span></Link>
         <Link href="/work-orders" className="dashboard-kpi"><small>أوامر العمل</small><strong>{counts.workOrders}</strong><span>أمر في السجل</span></Link>
-        <Link href="/items" className="dashboard-kpi"><small>قاموس البنود</small><strong>{counts.items}</strong><span>بند موحد قابل للبحث</span></Link>
+        <Link href="/items" className="dashboard-kpi"><small>البنود</small><strong>{counts.items}</strong><span>بند مسجل في قاعدة المعرفة</span></Link>
       </section>
 
       <section className="dashboard-section">
@@ -242,7 +226,7 @@ export default function Home() {
           <article className="status-overview active"><span>جارية الآن</span><strong>{timingCounts.active}</strong><small>أوامر ضمن فترة التنفيذ</small></article>
           <article className="status-overview upcoming"><span>تبدأ قريبًا</span><strong>{timingCounts.upcoming}</strong><small>خلال 30 يومًا</small></article>
           <article className="status-overview warning"><span>قريبة من الانتهاء</span><strong>{timingCounts.endingSoon}</strong><small>متبقٍ 30 يومًا أو أقل</small></article>
-          <article className="status-overview ended"><span>منتهية</span><strong>{timingCounts.ended}</strong><small>ضمن أحدث الأوامر المحملة</small></article>
+          <article className="status-overview ended"><span>انتهت مدتها</span><strong>{timingCounts.ended}</strong><small>بحسب جميع أوامر العمل</small></article>
         </div>
       </section>
 
@@ -270,7 +254,7 @@ export default function Home() {
         <div className="dashboard-section alerts-panel">
           <div className="dashboard-section-head">
             <div><span className="section-kicker">مركز التنبيهات</span><h2>يحتاج إلى متابعة</h2></div>
-            <span className="alert-count">{alerts.length}</span>
+            <Link href="/alerts" className="text-link">عرض المركز</Link>
           </div>
           <div className="dashboard-alert-list">
             {alerts.map(({ order, timing }) => (
@@ -300,22 +284,24 @@ export default function Home() {
         </div>
 
         <div className="dashboard-section">
-          <div className="dashboard-section-head"><div><span className="section-kicker">الاستيراد</span><h2>آخر ملفات البيانات</h2></div></div>
+          <div className="dashboard-section-head"><div><span className="section-kicker">حركة المواقع</span><h2>المواقع الأكثر نشاطًا</h2></div><Link href="/sites" className="text-link">كل المواقع</Link></div>
           <div className="dashboard-activity-list">
-            {recentImports.slice(0, 5).map((batch) => (
-              <article className="dashboard-activity-row" key={batch.id}>
-                <div className="import-mini-status" data-status={batch.import_status}>XL</div>
-                <div><b>{batch.file_name}</b><small>{formatDate(batch.created_at)} · {batch.imported_rows_count || 0} صف · {batch.error_rows_count || 0} خطأ</small></div>
-              </article>
+            {sites.slice(0, 5).map((site, index) => (
+              <Link href={`/site/${site.site_id}`} className="dashboard-site-row" key={site.site_id}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <div><b>{site.site_name}</b><small>{site.project_name}</small></div>
+                <div className="dashboard-site-metrics"><b>{site.work_orders_count}</b><small>أمر عمل</small></div>
+              </Link>
             ))}
-            {!loading && recentImports.length === 0 && <div className="empty">لا توجد عمليات استيراد مسجلة.</div>}
+            {!loading && sites.length === 0 && <div className="empty">لا توجد مواقع مرتبطة بأوامر عمل.</div>}
           </div>
         </div>
       </section>
 
       <section className="dashboard-decision-strip">
         <div><span>الرصيد المتبقي المسجل</span><strong>{formatNumber(totalRemaining)}</strong></div>
-        <p>استخدم قصة الموقع قبل اعتماد أي احتياج أو إصدار أمر عمل جديد.</p>
+        <p>هذا الرقم ملخص من البنود المسجلة، ويمكن فتح قسم البنود للوصول إلى تفاصيل الكميات.</p>
+        <Link href="/items" className="text-link">فتح البنود ←</Link>
       </section>
     </main>
   );

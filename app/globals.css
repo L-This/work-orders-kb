@@ -514,6 +514,17 @@ body{margin:0;background:var(--shell-bg)}
 .dashboard-decision-strip{padding:16px 20px}
 @media(max-width:650px){.dashboard-section{padding:16px}.dashboard-clear-state{min-height:92px}.dashboard-project-row{min-height:58px}}
 
+/* === EXECUTIVE DASHBOARD V30 === */
+.dashboard-welcome{min-height:220px;padding:36px 40px;background:radial-gradient(circle at 12% 15%,rgba(209,177,104,.2),transparent 30%),linear-gradient(135deg,#fffdf7,#f3ead3)}
+.dashboard-welcome h1{max-width:760px;font-size:clamp(36px,5vw,62px)}
+.dashboard-welcome p{max-width:720px;font-size:16px;line-height:1.8}
+.dashboard-focus-card{flex:0 0 270px;min-height:150px;padding:24px;border-radius:24px;background:linear-gradient(145deg,#0d4b3c,#17634f);color:#fff;display:grid;align-content:center;justify-items:center;text-align:center;box-shadow:0 20px 45px rgba(13,75,60,.2)}
+.dashboard-focus-card small,.dashboard-focus-card span{color:#cce0d8}.dashboard-focus-card strong{font-size:46px;line-height:1.1}.dashboard-focus-card a{margin-top:13px;padding:9px 15px;border:1px solid rgba(255,255,255,.28);border-radius:11px;color:#fff;text-decoration:none;font-weight:900;font-size:12px}
+.dashboard-kpi{position:relative;overflow:hidden;min-height:132px;padding-inline-start:28px;border-top:4px solid #789188}.dashboard-kpi:nth-child(2){border-top-color:#3f9a72}.dashboard-kpi:nth-child(3){border-top-color:#c79a43}.dashboard-kpi:nth-child(4){border-top-color:#4d8290}.dashboard-kpi:after{content:'↗';position:absolute;inset-inline-end:20px;top:18px;color:#b79a5c;font-size:18px}.dashboard-kpi strong{font-size:38px}
+.dashboard-site-row{min-height:58px;padding:8px;border-bottom:1px solid rgba(25,75,60,.09);display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:11px;color:var(--green);text-decoration:none}.dashboard-site-row>span{width:38px;height:38px;border-radius:11px;background:#e9f4ef;display:grid;place-items:center;font-weight:900}.dashboard-site-row>div{min-width:0;display:grid;gap:3px}.dashboard-site-row b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dashboard-site-row small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dashboard-site-metrics{min-width:58px;text-align:center}.dashboard-site-metrics b{font-size:18px}.dashboard-site-metrics small{font-size:9px}.dashboard-site-row:hover{background:#fffdf8}
+.dashboard-decision-strip>a{white-space:nowrap}
+@media(max-width:780px){.dashboard-welcome{align-items:stretch;flex-direction:column;padding:28px 22px}.dashboard-focus-card{flex-basis:auto}.dashboard-site-row{grid-template-columns:38px minmax(0,1fr) auto}}
+
 /* === PROJECTS MANAGEMENT PAGE V20 === */
 .projects-management-page{max-width:1500px;margin:0 auto;display:grid;gap:16px}
 .projects-hero{min-height:154px;padding:28px 32px;border:1px solid var(--line);border-radius:28px;background:radial-gradient(circle at 78% 0%,rgba(209,177,104,.2),transparent 34%),linear-gradient(135deg,#fffaf0,#f7f0dd);box-shadow:0 16px 40px rgba(20,63,51,.065);display:flex;align-items:center;justify-content:space-between;gap:28px}
