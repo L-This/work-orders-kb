@@ -35,8 +35,10 @@ export async function GET(request: NextRequest) {
     const error = projectsResult.error || ordersResult.error || sitesResult.error || itemsResult.error || orderSitesResult.error || orderItemsResult.error || boqResult.error;
     if (error) throw error;
 
-    const projects:any[] = projectsResult.data || [], orders:any[] = ordersResult.data || [], sites:any[] = sitesResult.data || [], items:any[] = itemsResult.data || [];
+    const projects:any[] = projectsResult.data || [], orders:any[] = ordersResult.data || [], sites:any[] = sitesResult.data || [];
     const orderSites:any[] = orderSitesResult.data || [], orderItems:any[] = orderItemsResult.data || [], boq:any[] = boqResult.data || [];
+    const linkedItemIds = new Set([...boq.map(row => row.item_id), ...orderItems.map(row => row.item_id)]);
+    const items:any[] = (itemsResult.data || []).filter(item => linkedItemIds.has(item.id));
     const needle = normalize(query), projectMap = new Map(projects.map(x => [x.id,x])), siteMap = new Map(sites.map(x => [x.id,x])), orderMap = new Map(orders.map(x => [x.id,x]));
     const sitesByOrder = new Map<string,any[]>(), itemsByOrder = new Map<string,any[]>(), ordersBySite = new Map<string,any[]>(), ordersByItem = new Map<string,any[]>(), projectsByItem = new Map<string,any[]>();
     for (const x of orderSites) { const site=siteMap.get(x.site_id), order=orderMap.get(x.work_order_id); if(site){if(!sitesByOrder.has(x.work_order_id))sitesByOrder.set(x.work_order_id,[]);sitesByOrder.get(x.work_order_id)!.push(site);} if(order){if(!ordersBySite.has(x.site_id))ordersBySite.set(x.site_id,[]);ordersBySite.get(x.site_id)!.push(order);} }

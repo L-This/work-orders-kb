@@ -52,17 +52,19 @@ export async function DELETE(_request: NextRequest, { params }: Context) {
     if (current.error) throw current.error;
     if (!current.data) return NextResponse.json({ error: 'المشروع غير موجود.' }, { status: 404 });
 
-    const [orders, sites, batches] = await Promise.all([
+    const [orders, sites, batches, projectItems] = await Promise.all([
       work.from('work_orders').select('id').eq('project_id', params.projectId),
       work.from('sites').select('id').eq('project_id', params.projectId),
       work.from('import_batches').select('id').eq('project_id', params.projectId),
+      work.from('project_boq_items').select('item_id').eq('project_id', params.projectId),
     ]);
-    const firstError = orders.error || sites.error || batches.error;
+    const firstError = orders.error || sites.error || batches.error || projectItems.error;
     if (firstError) throw firstError;
 
     const orderIds = (orders.data || []).map((row) => row.id);
     const siteIds = (sites.data || []).map((row) => row.id);
     const batchIds = (batches.data || []).map((row) => row.id);
+    const candidateItemIds = Array.from(new Set((projectItems.data || []).map((row) => row.item_id).filter(Boolean)));
 
     async function remove(table: string, column: string, ids: string[]) {
       if (!ids.length) return;
@@ -86,7 +88,28 @@ export async function DELETE(_request: NextRequest, { params }: Context) {
 
     const deleted = await work.from('projects').delete().eq('id', params.projectId).select('id').single();
     if (deleted.error) throw deleted.error;
-    return NextResponse.json({ deleted: true, removed: { workOrders: orderIds.length, sites: siteIds.length, importBatches: batchIds.length } });
+
+    let orphanItemsRemoved = 0;
+    if (candidateItemIds.length) {
+      const [remainingBoq, remainingLines] = await Promise.all([
+        work.from('project_boq_items').select('item_id').in('item_id', candidateItemIds),
+        work.from('work_order_items').select('item_id').in('item_id', candidateItemIds),
+      ]);
+      const referenceError = remainingBoq.error || remainingLines.error;
+      if (referenceError) throw referenceError;
+      const stillUsed = new Set([
+        ...(remainingBoq.data || []).map((row) => row.item_id),
+        ...(remainingLines.data || []).map((row) => row.item_id),
+      ]);
+      const orphanIds = candidateItemIds.filter((id) => !stillUsed.has(id));
+      if (orphanIds.length) {
+        const orphanDelete = await work.from('items').delete().in('id', orphanIds).select('id');
+        if (orphanDelete.error) throw orphanDelete.error;
+        orphanItemsRemoved = orphanDelete.data?.length || 0;
+      }
+    }
+
+    return NextResponse.json({ deleted: true, removed: { workOrders: orderIds.length, sites: siteIds.length, importBatches: batchIds.length, orphanItems: orphanItemsRemoved } });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error, 'تعذر حذف المشروع.') }, { status: 500 });
   }

@@ -29,8 +29,13 @@ export async function GET() {
     const error = items.error || boq.error || lines.error || projects.error || orders.error;
     if (error) throw error;
 
+    const linkedItemIds = new Set([
+      ...(boq.data || []).map((row) => row.item_id),
+      ...(lines.data || []).map((row) => row.item_id),
+    ]);
+
     return NextResponse.json({
-      items: items.data || [],
+      items: (items.data || []).filter((item) => linkedItemIds.has(item.id)),
       boq: boq.data || [],
       lines: lines.data || [],
       projects: projects.data || [],

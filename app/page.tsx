@@ -45,13 +45,15 @@ export default function Home() {
       projectsResult,
       sitesCountResult,
       ordersCountResult,
-      itemsCountResult,
+      boqItemsResult,
+      orderItemsResult,
       ordersResult,
     ] = await Promise.all([
       supabase.from('projects').select('*', { count: 'exact' }).is('deleted_at', null).or('status.is.null,status.neq.deleted').order('created_at', { ascending: false }),
       supabase.from('sites').select('id', { count: 'exact', head: true }),
       supabase.from('work_orders').select('id', { count: 'exact', head: true }),
-      supabase.from('items').select('id', { count: 'exact', head: true }),
+      supabase.from('project_boq_items').select('item_id'),
+      supabase.from('work_order_items').select('item_id'),
       supabase
         .from('work_orders')
         .select('id,project_id,work_order_number,work_order_date,title,status,work_order_end_date,duration_days,projects(name)')
@@ -63,7 +65,8 @@ export default function Home() {
       projectsResult.error,
       sitesCountResult.error,
       ordersCountResult.error,
-      itemsCountResult.error,
+      boqItemsResult.error,
+      orderItemsResult.error,
       ordersResult.error,
     ].find(Boolean);
 
@@ -73,7 +76,10 @@ export default function Home() {
       projects: projectsResult.count ?? projectsResult.data?.length ?? 0,
       sites: sitesCountResult.count ?? 0,
       workOrders: ordersCountResult.count ?? 0,
-      items: itemsCountResult.count ?? 0,
+      items: new Set([
+        ...(boqItemsResult.data || []).map((row) => row.item_id),
+        ...(orderItemsResult.data || []).map((row) => row.item_id),
+      ].filter(Boolean)).size,
     });
     setRecentOrders((ordersResult.data || []) as unknown as WorkOrder[]);
   }
