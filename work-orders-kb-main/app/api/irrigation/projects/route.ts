@@ -2,12 +2,6 @@ import { NextResponse } from 'next/server';
 import { createIrrigationAdminClient, createWorkOrdersAdminClient } from '@/lib/server-supabase';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-const noStoreHeaders = {
-  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-  Pragma: 'no-cache',
-};
 
 export async function GET() {
   try {
@@ -21,7 +15,7 @@ export async function GET() {
       .select('work_orders_project_id,irrigation_project_id,irrigation_project_name,last_synced_at');
 
     const [workProjects, irrigationProjects, sites, imports] = await Promise.all([
-      work.from('projects').select('id,name,contractor_name,status,deleted_at').is('deleted_at', null).order('name'),
+      work.from('projects').select('id,name,contractor_name').is('deleted_at', null).or('status.is.null,status.neq.deleted').order('name'),
       irrigation.from('projects').select('id,name').order('name'),
       work.from('sites').select('id,project_id,status,source_system,synced_at'),
       work.from('import_batches').select('id,project_id,import_status,error_rows_count,created_at').order('created_at', { ascending: false }).limit(20),
@@ -30,27 +24,9 @@ export async function GET() {
     const error = workProjects.error || irrigationProjects.error || sites.error || imports.error || links.error;
     if (error) throw error;
 
-    const activeWorkProjects = (workProjects.data || []).filter((project) => {
-      const status = String(project.status || '').toLowerCase();
-      return !project.deleted_at && status !== 'deleted';
-    });
-    const activeProjectIds = new Set(activeWorkProjects.map((project) => project.id));
+    const activeProjectIds = new Set((workProjects.data || []).map((project) => project.id));
     const activeSites = (sites.data || []).filter((site) => activeProjectIds.has(site.project_id));
     const activeLinks = (links.data || []).filter((link) => activeProjectIds.has(link.work_orders_project_id));
-    const orphanLinkProjectIds = (links.data || [])
-      .filter((link) => !activeProjectIds.has(link.work_orders_project_id))
-      .map((link) => link.work_orders_project_id);
-
-    // Older deployments could leave an integration link after its local project
-    // was removed. It is safe to remove those orphan rows because the source
-    // project no longer exists in the active work-orders system.
-    if (orphanLinkProjectIds.length) {
-      const cleanup = await work
-        .from('project_irrigation_links')
-        .delete()
-        .in('work_orders_project_id', orphanLinkProjectIds);
-      if (cleanup.error) throw cleanup.error;
-    }
     const activeImports = (imports.data || []).filter((batch) => !batch.project_id || activeProjectIds.has(batch.project_id));
     const projectSiteStats: Record<string, { total: number; synced: number; inactive: number }> = {};
     for (const site of activeSites) {
@@ -62,7 +38,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      workProjects: activeWorkProjects.map(({ id, name, contractor_name }) => ({ id, name, contractor_name })),
+      workProjects: workProjects.data || [],
       irrigationProjects: irrigationProjects.data || [],
       links: activeLinks,
       projectSiteStats,
@@ -72,14 +48,14 @@ export async function GET() {
         inactiveSites: activeSites.filter((site) => site.status === 'inactive').length,
         failedImports: activeImports.filter((batch) => batch.import_status === 'failed' || Number(batch.error_rows_count || 0) > 0).length,
       },
-    }, { headers: noStoreHeaders });
+    });
   } catch (error) {
     const details = error && typeof error === 'object'
       ? error as { message?: string; details?: string; hint?: string }
       : null;
     return NextResponse.json(
       { error: details?.message || details?.details || details?.hint || 'تعذر قراءة بيانات الربط.' },
-      { status: 500, headers: noStoreHeaders },
+      { status: 500 },
     );
   }
 }
