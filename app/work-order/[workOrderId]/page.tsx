@@ -78,6 +78,7 @@ export default function WorkOrderDetailPage({
   const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [activeSection, setActiveSection] = useState<'summary' | 'sites' | 'items' | 'attachments'>('summary');
 
   useEffect(() => {
     load();
@@ -274,7 +275,14 @@ export default function WorkOrderDetailPage({
         </div>
       ) : null}
 
-      <section className="section-block work-order-unit-summary">
+      <nav className="detail-section-switcher" aria-label="أقسام أمر العمل">
+        <button className={activeSection === 'summary' ? 'active' : ''} onClick={() => setActiveSection('summary')}><span>◫</span><b>الملخص</b><small>{quantitiesByUnit.length} وحدات قياس</small></button>
+        <button className={activeSection === 'sites' ? 'active' : ''} onClick={() => setActiveSection('sites')}><span>⌖</span><b>المواقع</b><small>{sites.length} مواقع مرتبطة</small></button>
+        <button className={activeSection === 'items' ? 'active' : ''} onClick={() => setActiveSection('items')}><span>≡</span><b>البنود</b><small>{items.length} سجل</small></button>
+        <button className={activeSection === 'attachments' ? 'active' : ''} onClick={() => setActiveSection('attachments')}><span>⌑</span><b>المرفقات</b><small>{attachments.length} ملف</small></button>
+      </nav>
+
+      {activeSection === 'summary' ? <section className="section-block work-order-unit-summary detail-stage">
         <div className="section-title">
           <div>
             <span className="section-kicker">ملخص الكميات</span>
@@ -290,9 +298,9 @@ export default function WorkOrderDetailPage({
             </div>
           ))}
         </div>
-      </section>
+      </section> : null}
 
-      <div className="work-order-detail-grid">
+      {activeSection === 'sites' ? <div className="work-order-detail-grid detail-stage single-stage">
         <section className="panel work-order-sites-panel">
           <div className="section-title">
             <div>
@@ -319,6 +327,9 @@ export default function WorkOrderDetailPage({
           ) : null}
         </section>
 
+      </div> : null}
+
+      {activeSection === 'attachments' ? <div className="work-order-detail-grid detail-stage single-stage">
         <section className="panel work-order-attachments-panel">
           <div className="section-title">
             <div>
@@ -349,9 +360,9 @@ export default function WorkOrderDetailPage({
             <div className="empty">لا توجد مرفقات مسجلة لهذا الأمر حتى الآن.</div>
           )}
         </section>
-      </div>
+      </div> : null}
 
-      <section className="section-block work-order-items-section">
+      {activeSection === 'items' ? <section className="section-block work-order-items-section detail-stage">
         <div className="section-title">
           <div>
             <span className="section-kicker">البنود والكميات</span>
@@ -394,7 +405,7 @@ export default function WorkOrderDetailPage({
         {!loading && items.length === 0 ? (
           <div className="empty">لا توجد بنود مسجلة في أمر العمل.</div>
         ) : null}
-      </section>
+      </section> : null}
     </main>
   );
 }

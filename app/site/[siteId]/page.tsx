@@ -22,6 +22,7 @@ export default function SitePage({ params }: { params: { siteId: string } }) {
   const [orderSiteCounts,setOrderSiteCounts]=useState<Record<string,number>>({});
   const [loading,setLoading]=useState(false);
   const [message,setMessage]=useState('');
+  const [activeSection,setActiveSection]=useState<'journey'|'items'>('journey');
 
   useEffect(()=>{ load(); },[]);
 
@@ -89,7 +90,12 @@ export default function SitePage({ params }: { params: { siteId: string } }) {
 
     <div className="notice site-story-note"><b>تنبيه دقة البيانات:</b> هذه الصفحة تثبت أن الموقع ورد ضمن أمر العمل. أما الكميات المعروضة فهي <b>كميات أمر العمل كاملة لجميع المواقع المرتبطة به</b>، ولا تمثل كمية منفذة داخل هذا الموقع بعينه إلا إذا كان أمر العمل مرتبطًا بموقع واحد فقط.</div>
 
-    <section className="panel site-story-section">
+    <nav className="detail-section-switcher site-detail-switcher" aria-label="أقسام الموقع">
+      <button className={activeSection==='journey'?'active':''} onClick={()=>setActiveSection('journey')}><span>◷</span><b>رحلة أوامر العمل</b><small>{orders.length} أمر مرتبط</small></button>
+      <button className={activeSection==='items'?'active':''} onClick={()=>setActiveSection('items')}><span>≡</span><b>البنود المرتبطة</b><small>{cumulative.length} بند مختلف</small></button>
+    </nav>
+
+    {activeSection==='journey'?<section className="panel site-story-section detail-stage">
       <div className="section-title"><div><span className="section-kicker">التسلسل الزمني</span><h2>رحلة أوامر العمل</h2></div><span>{orders.length} أمر</span></div>
       <div className="story-timeline">
         {orders.map((o,index)=>{ const orderLines=linesByOrder.get(o.id)||[]; const executed=orderLines.reduce((s,l)=>s+num(l.executed_quantity ?? l.quantity),0); return <article className="story-order" key={o.id}>
@@ -101,12 +107,12 @@ export default function SitePage({ params }: { params: { siteId: string } }) {
         </article>})}
         {!orders.length && <div className="empty">لا توجد أوامر عمل مرتبطة.</div>}
       </div>
-    </section>
+    </section>:null}
 
-    <section className="panel site-story-section">
+    {activeSection==='items'?<section className="panel site-story-section detail-stage">
       <div className="notice site-story-note compact-note">الأرقام في هذا الجدول تخص أوامر العمل التي ورد فيها الموقع، وليست توزيعًا للكميات على الموقع نفسه.</div>
       <div className="section-title"><div><span className="section-kicker">مرجع ارتباط الموقع</span><h2>بنود أوامر العمل التي شملت الموقع</h2></div><span>{cumulative.length} بند</span></div>
       <div className="table-wrap"><table><thead><tr><th>البند</th><th>الوحدة</th><th>عدد أوامر العمل</th><th>إجمالي كميات الأوامر المرتبطة</th><th>آخر متبقٍ في رصيد البند</th></tr></thead><tbody>{cumulative.map((x,i)=><tr key={i}><td><b>{x.name}</b></td><td>{x.unit}</td><td>{x.orders.size}</td><td>{fmt(x.executed)}</td><td>{fmt(x.latestRemaining)}</td></tr>)}</tbody></table></div>
-    </section>
+    </section>:null}
   </main>;
 }
